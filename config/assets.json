@@ -1,0 +1,9 @@
+{
+  "_comment": "Paste Higgsfield https URLs here (spec §3). Empty values fall back to built-in noir CSS art.",
+  "thumbnail": "",
+  "favicon": "",
+  "backgrounds": { "lobby": "", "table": "" },
+  "roles": { "godfather": "", "detective": "", "doctor": "", "citizen": "" },
+  "cards": { "death": "", "victory_town": "", "victory_mafia": "" },
+  "audio": { "ambient": "" }
+}

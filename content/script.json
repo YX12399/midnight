@@ -1,0 +1,70 @@
+{
+  "_comment": "Narrator lines for Silas, the Barkeep of Midnight (spec §5). Keyed by phase -> array of variants. {NAME}/{ROLE} are template slots. The server picks a random variant and fills slots before sending NARRATE.",
+  "persona": "Silas, the Barkeep of Midnight",
+  "lines": {
+    "lobby": [
+      "Step inside. Coats on the rack, secrets in your pocket. We don't start 'til everyone's a stranger.",
+      "Welcome to Midnight, friend. Pull up a stool. Trust nobody — not even the bartender."
+    ],
+    "game_start": [
+      "Doors are locked. Everyone's here who's gonna be here. Let's see who walks out.",
+      "The roster's set. Somewhere in this room, the wrong people are smiling."
+    ],
+    "night_falls": [
+      "Midnight closes for the night. Eyes down, friends. The honest folk are already dreaming… the rest of us have work to do.",
+      "Lights low. Heads down. The night belongs to the people who don't sleep."
+    ],
+    "mafia_prompt": [
+      "Family business. Pick your mark.",
+      "You know the drill. Choose who doesn't see the sunrise."
+    ],
+    "detective_prompt": [
+      "You've got a hunch, counselor. Give me a name and I'll check the ledger.",
+      "Whose story doesn't add up? Point me at 'em."
+    ],
+    "doctor_prompt": [
+      "Somebody's gonna bleed tonight, doc. Pick who you keep breathing.",
+      "Your bag's packed. Choose the one you'll sit up with."
+    ],
+    "detective_result_clean": [
+      "I checked the ledger on your hunch. The name comes back… clean.",
+      "Ran it down. {NAME}? Their hands are clean. For now."
+    ],
+    "detective_result_dirty": [
+      "I checked the ledger on your hunch. The name comes back… dirty.",
+      "{NAME} is in it up to the neck. That one's family."
+    ],
+    "morning_death": [
+      "Sun's up. And so's the body count. We found {NAME} face-down by the piano. They won't be ordering another.",
+      "Morning, friends. One less stool's taken. {NAME} took a dirt nap in the night."
+    ],
+    "morning_no_death": [
+      "Funny thing — everybody's still breathing. Somebody upstairs was watching out.",
+      "No body this morning. Either the family got cold feet, or somebody played guardian angel."
+    ],
+    "day_discussion": [
+      "Talk amongst yourselves. Somebody at this bar is lying to your face. Find them before they find you.",
+      "Floor's open. Make your accusations. Just remember — the loudest one ain't always the guilty one."
+    ],
+    "vote_call": [
+      "Last call for votes. Point your finger and mean it.",
+      "Time's up for talk. Who's taking the long walk?"
+    ],
+    "vote_tie": [
+      "Can't make up your minds? The room splits, nobody swings. Cowards live another round.",
+      "Deadlock. Nobody hangs tonight — but the night's coming back."
+    ],
+    "elimination": [
+      "{NAME}, the room's decided. The door's that way. …Turns out they were {ROLE}.",
+      "Sorry, {NAME}. Majority rules. Pour one out — they were {ROLE} all along."
+    ],
+    "town_win": [
+      "Last rat's in the river. Midnight's clean tonight. Drinks on the house.",
+      "The family's finished. Town breathes easy. First round's on me."
+    ],
+    "mafia_win": [
+      "The family runs this town now. Always did. Goodnight, friends — what's left of you.",
+      "Lights out for the good guys. Midnight belongs to the family. It always did."
+    ]
+  }
+}

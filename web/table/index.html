@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MIDNIGHT — Table View</title>
+<link rel="stylesheet" href="/shared.css" />
+</head>
+<body>
+<div class="wrap" style="max-width:900px">
+  <div class="brand"><span class="big">MIDNIGHT</span></div>
+
+  <section id="join" class="card center">
+    <label>Table code</label>
+    <input id="code" type="text" maxlength="4" style="text-transform:uppercase" placeholder="4 letters" />
+    <button id="go">Show the Room</button>
+  </section>
+
+  <section id="view" class="card hidden center">
+    <span class="phase-pill" id="phase">—</span>
+    <span class="muted" id="round" style="margin-left:10px"></span>
+    <p class="narration" id="narration" style="font-size:30px;min-height:80px">…</p>
+    <div style="display:flex;gap:30px;justify-content:center;text-align:left;margin-top:20px">
+      <div><label>Still standing</label><ul class="list" id="alive"></ul></div>
+      <div><label>Gone</label><ul class="list" id="dead"></ul></div>
+    </div>
+  </section>
+</div>
+<script src="/app-common.js"></script>
+<script>
+(function(){
+  const $=(id)=>document.getElementById(id);
+  const qp=new URLSearchParams(location.search);
+  if(qp.get("code")) $("code").value=qp.get("code").toUpperCase();
+  const ws=MidnightWS(onMessage,()=>{});
+  $("go").onclick=()=>{ const c=$("code").value.trim().toUpperCase(); if(c.length===4){ ws.send({type:"TABLE_JOIN",code:c}); $("join").classList.add("hidden"); $("view").classList.remove("hidden"); } };
+  function onMessage(m){
+    if(m.type==="STATE"){
+      $("phase").textContent=m.phase; $("round").textContent=m.round?("Round "+m.round):"";
+      const a=$("alive"); a.innerHTML=""; (m.alive||[]).forEach(p=>{const li=document.createElement("li");li.textContent=p.name;a.appendChild(li);});
+      const d=$("dead"); d.innerHTML=""; (m.dead||[]).forEach(p=>{const li=document.createElement("li");li.innerHTML="<span class='dead'>"+p.name+"</span><span class='tag'>"+(p.role||"?")+"</span>";d.appendChild(li);});
+    }
+    if(m.type==="NARRATE"){ $("narration").textContent=m.text; }
+    if(m.type==="GAME_OVER"){ $("narration").textContent = m.winner==="town"?"TOWN WINS":"THE FAMILY WINS"; }
+  }
+})();
+</script>
+</body>
+</html>

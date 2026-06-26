@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0b0a0f" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>MIDNIGHT — Player</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="stylesheet" href="/shared.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">A game of trust &amp; lies<span class="big">MIDNIGHT</span></div>
+  <div class="caption" id="caption"></div>
+
+  <!-- JOIN -->
+  <section id="screen-join" class="card">
+    <label>Your name</label>
+    <input id="name" type="text" maxlength="20" placeholder="who are you tonight?" autocomplete="off" />
+    <label>Table code</label>
+    <input id="code" type="text" maxlength="4" placeholder="4 letters" autocomplete="off" style="text-transform:uppercase" />
+    <button id="joinBtn">Enter Midnight</button>
+    <p class="muted center" id="joinErr" style="min-height:18px;margin-top:12px"></p>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="screen-lobby" class="card hidden center">
+    <h2 id="lobbyName"></h2>
+    <p class="muted">You're in. Coat's on the rack.</p>
+    <p class="caption">Waiting for the host to lock the doors…</p>
+    <p class="muted" id="lobbyCount"></p>
+  </section>
+
+  <!-- ROLE -->
+  <section id="screen-role" class="card role-card hidden">
+    <div class="role-art" id="roleArt"></div>
+    <div class="role-name" id="roleName"></div>
+    <div class="team" id="roleTeam"></div>
+    <p id="roleBlurb" style="margin-top:16px;line-height:1.6"></p>
+    <button class="ghost" id="hideRole">Tap to hide — keep it secret</button>
+  </section>
+
+  <!-- NIGHT ACTION -->
+  <section id="screen-night" class="card hidden">
+    <div class="phase-pill">Night</div>
+    <p class="narration" id="nightPrompt"></p>
+    <div id="nightTargets"></div>
+    <p class="caption hidden" id="nightDone">Your move's in. Sit tight.</p>
+  </section>
+
+  <!-- SLEEP -->
+  <section id="screen-sleep" class="card sleeping hidden">
+    <div class="z">z z z</div>
+    <p class="muted" id="sleepText">Eyes closed. The honest folk are dreaming.</p>
+  </section>
+
+  <!-- RESULT (detective) -->
+  <section id="screen-result" class="card hidden center">
+    <div class="phase-pill">A word, counselor</div>
+    <p class="narration" id="resultText"></p>
+    <button class="ghost" id="resultHide">Tap to hide</button>
+  </section>
+
+  <!-- DAY -->
+  <section id="screen-day" class="card hidden center">
+    <div class="phase-pill">Daybreak</div>
+    <p class="narration">Heads up. Talk it out — out loud, eyes on each other. Find the rat.</p>
+    <p class="muted">No taps right now. Just your voice and your gut.</p>
+  </section>
+
+  <!-- VOTE -->
+  <section id="screen-vote" class="card hidden">
+    <div class="phase-pill">The vote</div>
+    <p class="narration">Point your finger and mean it.</p>
+    <div id="voteTargets"></div>
+    <p class="caption hidden" id="voteDone">Vote locked.</p>
+  </section>
+
+  <!-- GHOST -->
+  <section id="screen-ghost" class="card hidden">
+    <div class="phase-pill">Ghost</div>
+    <p class="center narration">You're out of the game. Watch quietly — don't tip the living.</p>
+    <ul class="list" id="ghostList"></ul>
+  </section>
+
+  <!-- END -->
+  <section id="screen-end" class="card hidden center">
+    <div class="banner" id="endBanner"></div>
+    <ul class="list" id="endList"></ul>
+  </section>
+
+  <div class="foot">MIDNIGHT · keep your phone face-down at the table</div>
+</div>
+
+<script src="/app-common.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const screens = ["join","lobby","role","night","sleep","result","day","vote","ghost","end"];
+  function show(name) {
+    screens.forEach((s) => $("screen-" + s).classList.toggle("hidden", s !== name));
+  }
+  function caption(t) { $("caption").textContent = t || ""; }
+
+  let token = localStorage.getItem("mid_token");
+  let code = localStorage.getItem("mid_code");
+  let myRole = null;
+  let lastBeforeDay = null;
+
+  // prefill code from ?code=
+  const qp = new URLSearchParams(location.search);
+  if (qp.get("code")) $("code").value = qp.get("code").toUpperCase();
+
+  const ws = MidnightWS(onMessage, onOpen);
+
+  function onOpen() {
+    if (token && code) ws.send({ type: "REJOIN", code, token });
+  }
+
+  $("joinBtn").onclick = () => {
+    const name = $("name").value.trim();
+    const c = $("code").value.trim().toUpperCase();
+    if (!name) return ($("joinErr").textContent = "Tell us who you are.");
+    if (c.length !== 4) return ($("joinErr").textContent = "Code is 4 letters.");
+    $("joinErr").textContent = "";
+    ws.send({ type: "JOIN", code: c, name });
+  };
+
+  $("hideRole").onclick = () => { $("screen-role").classList.add("hidden"); show("lobby"); $("lobbyName").textContent = "Role hidden 🤫"; };
+  $("resultHide").onclick = () => $("screen-result").classList.add("hidden");
+
+  function renderTargets(container, targets, onPick) {
+    container.innerHTML = "";
+    targets.forEach((t) => {
+      const b = document.createElement("button");
+      b.className = "target";
+      b.textContent = t.name;
+      b.onclick = () => {
+        [...container.children].forEach((c) => c.classList.remove("selected"));
+        b.classList.add("selected");
+        onPick(t.id);
+      };
+      container.appendChild(b);
+    });
+  }
+
+  function onMessage(m) {
+    switch (m.type) {
+      case "JOINED":
+        token = m.token; code = m.code;
+        localStorage.setItem("mid_token", token);
+        localStorage.setItem("mid_code", code);
+        $("lobbyName").textContent = m.name;
+        show("lobby");
+        break;
+
+      case "ROSTER":
+        $("lobbyCount").textContent = m.count + " at the table";
+        break;
+
+      case "ROLE_ASSIGNED": {
+        myRole = m.role;
+        const art = $("roleArt");
+        if (m.art_url) { art.style.backgroundImage = "url(" + m.art_url + ")"; art.textContent = ""; }
+        else { art.style.backgroundImage = ""; art.textContent = { godfather:"🎩", detective:"🔍", doctor:"⚕", citizen:"🥃" }[m.role] || "?"; }
+        $("roleName").textContent = m.role;
+        $("roleTeam").textContent = m.team === "mafia" ? "The Family" : "The Town";
+        $("roleBlurb").textContent = m.blurb || "";
+        show("role");
+        break;
+      }
+
+      case "NIGHT_PROMPT":
+        $("nightPrompt").textContent = m.prompt || "Make your move.";
+        $("nightDone").classList.add("hidden");
+        renderTargets($("nightTargets"), m.valid_targets, (id) => {
+          ws.send({ type: "NIGHT_ACTION", token, target_id: id });
+        });
+        show("night");
+        break;
+
+      case "NIGHT_WAIT":
+        $("sleepText").textContent = m.text || "Eyes closed.";
+        show("sleep");
+        break;
+
+      case "ACTION_ACK":
+        $("nightDone").classList.remove("hidden");
+        $("nightTargets").innerHTML = "";
+        break;
+
+      case "NIGHT_RESULT":
+        $("resultText").textContent = m.text;
+        show("result");
+        break;
+
+      case "VOTE_PROMPT": {
+        $("voteDone").classList.add("hidden");
+        const targets = m.valid_targets.concat([{ id: "skip", name: "— Abstain —" }]);
+        renderTargets($("voteTargets"), targets, (id) => {
+          ws.send({ type: "VOTE", token, target_id: id });
+        });
+        show("vote");
+        break;
+      }
+
+      case "VOTE_ACK":
+        $("voteDone").classList.remove("hidden");
+        $("voteTargets").innerHTML = "";
+        break;
+
+      case "GHOST": {
+        const ul = $("ghostList");
+        ul.innerHTML = "";
+        m.roles.forEach((r) => {
+          const li = document.createElement("li");
+          li.innerHTML = "<span class='" + (r.alive ? "" : "dead") + "'>" + r.name + "</span><span class='tag'>" + r.role + "</span>";
+          ul.appendChild(li);
+        });
+        show("ghost");
+        break;
+      }
+
+      case "CAPTION":
+        caption(m.text);
+        break;
+
+      case "STATE":
+        // Living players: if it's day discussion and we're not ghost/role screens, show day.
+        if (m.phase === "DAY_DISCUSSION" && !isGhost()) show("day");
+        if (m.phase === "LOBBY" && token) { /* between-game lobby */ }
+        break;
+
+      case "GAME_OVER": {
+        const b = $("endBanner");
+        b.textContent = m.winner === "town" ? "The town breathes easy." : "The family runs this town.";
+        b.className = "banner " + m.winner;
+        const ul = $("endList"); ul.innerHTML = "";
+        m.roles.forEach((r) => {
+          const li = document.createElement("li");
+          li.innerHTML = "<span>" + r.name + "</span><span class='tag'>" + r.role + "</span>";
+          ul.appendChild(li);
+        });
+        show("end");
+        break;
+      }
+
+      case "ERROR":
+        $("joinErr").textContent = m.message;
+        break;
+    }
+  }
+  function isGhost() { return !$("screen-ghost").classList.contains("hidden"); }
+})();
+</script>
+</body>
+</html>

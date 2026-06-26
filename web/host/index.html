@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0a0f" />
+<title>MIDNIGHT — Host</title>
+<link rel="stylesheet" href="/shared.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<div class="wrap" style="max-width:640px">
+  <div class="brand">The house always knows<span class="big">MIDNIGHT</span></div>
+
+  <!-- CREATE -->
+  <section id="screen-create" class="card center">
+    <p class="tagline">A voice-narrated game of trust &amp; lies, for 5–12 around a table.</p>
+    <button id="createBtn">Open the Bar</button>
+    <p class="muted" id="voiceNote" style="margin-top:14px"></p>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="screen-lobby" class="card hidden">
+    <p class="center muted">Players scan to join — or punch in the code</p>
+    <div class="code" id="codeBig"></div>
+    <div id="qr"></div>
+    <p class="center muted" id="joinUrl"></p>
+    <label>At the table <span id="count">(0)</span></label>
+    <ul class="list" id="roster"></ul>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+      <input type="checkbox" id="recording" style="width:auto" />
+      <label for="recording" style="margin:0;text-transform:none;letter-spacing:0;color:var(--muted)">Record &amp; transcribe the table (for the post-game recap)</label>
+    </div>
+    <button id="startBtn" disabled>Lock the Doors &amp; Deal</button>
+    <p class="center muted" id="startHint">Need at least 5 players.</p>
+  </section>
+
+  <!-- PLAY -->
+  <section id="screen-play" class="card hidden">
+    <div class="center">
+      <span class="phase-pill" id="phasePill">—</span>
+      <span class="muted" id="roundLabel" style="margin-left:10px"></span>
+    </div>
+    <p class="narration" id="narration">…</p>
+    <div class="row" id="hostControls"></div>
+    <p class="center muted" id="progress"></p>
+    <div style="display:flex;gap:20px;margin-top:18px">
+      <div style="flex:1">
+        <label>Still standing</label>
+        <ul class="list" id="aliveList"></ul>
+      </div>
+      <div style="flex:1">
+        <label>Gone</label>
+        <ul class="list" id="deadList"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- END -->
+  <section id="screen-end" class="card hidden center">
+    <div class="banner" id="endBanner"></div>
+    <ul class="list" id="endList"></ul>
+    <button id="againBtn">Play Again — Reshuffle</button>
+  </section>
+
+  <div class="foot">MIDNIGHT · this device is the room speaker — turn it up</div>
+</div>
+
+<script src="/app-common.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const screens = ["create","lobby","play","end"];
+  const show = (n) => screens.forEach((s) => $("screen-" + s).classList.toggle("hidden", s !== n));
+
+  let hostToken = localStorage.getItem("mid_hostToken");
+  let code = localStorage.getItem("mid_hostCode");
+  let phase = "LOBBY";
+
+  const ws = MidnightWS(onMessage, onOpen);
+  function onOpen() {
+    if (hostToken && code) ws.send({ type: "HOST_RECONNECT", code, hostToken });
+  }
+
+  $("createBtn").onclick = () => { MidnightSpeak.unlock(); ws.send({ type: "HOST_CREATE" }); };
+
+  $("recording").onchange = (e) => ws.send({ type: "HOST_SET_RECORDING", hostToken, value: e.target.checked });
+
+  $("startBtn").onclick = () => { MidnightSpeak.unlock(); ws.send({ type: "HOST_START", hostToken }); };
+  $("againBtn").onclick = () => ws.send({ type: "HOST_RESTART", hostToken });
+
+  function renderRoster(m) {
+    $("count").textContent = "(" + m.count + ")";
+    const ul = $("roster"); ul.innerHTML = "";
+    m.players.forEach((p) => {
+      const li = document.createElement("li");
+      li.innerHTML = "<span>" + p.name + "</span><span class='muted'>" + (p.connected ? "●" : "○") + "</span>";
+      ul.appendChild(li);
+    });
+    const ok = m.count >= 5 && m.count <= 12;
+    $("startBtn").disabled = !ok;
+    $("startHint").textContent = m.count < 5 ? "Need at least 5 players (" + m.count + " so far)." :
+      m.count > 12 ? "Too many — 12 max." : "Ready when you are.";
+  }
+
+  function showQR(code) {
+    const url = location.origin + "/?code=" + code;
+    $("codeBig").textContent = code;
+    $("joinUrl").textContent = url;
+    const box = $("qr"); box.innerHTML = "";
+    if (window.QRCode) new QRCode(box, { text: url, width: 200, height: 200, colorDark: "#0b0a0f", colorLight: "#ffffff" });
+    else box.innerHTML = "<p class='muted'>" + url + "</p>";
+  }
+
+  function controlButton(label, cls, onclick) {
+    const b = document.createElement("button");
+    b.textContent = label; if (cls) b.className = cls; b.onclick = onclick;
+    return b;
+  }
+  function renderControls() {
+    const c = $("hostControls"); c.innerHTML = "";
+    if (phase === "NIGHT")
+      c.appendChild(controlButton("Force-resolve night", "ghost", () => ws.send({ type: "HOST_RESOLVE_NIGHT", hostToken })));
+    else if (phase === "DAY_DISCUSSION")
+      c.appendChild(controlButton("Call the vote", "", () => ws.send({ type: "HOST_OPEN_VOTE", hostToken })));
+    else if (phase === "DAY_VOTE")
+      c.appendChild(controlButton("Force-tally votes", "ghost", () => ws.send({ type: "HOST_RESOLVE_VOTE", hostToken })));
+  }
+
+  function onMessage(m) {
+    switch (m.type) {
+      case "HOSTED":
+        hostToken = m.hostToken; code = m.code;
+        localStorage.setItem("mid_hostToken", hostToken);
+        localStorage.setItem("mid_hostCode", code);
+        showQR(code); show("lobby");
+        break;
+      case "ROSTER":
+        if (code) showQR(code);
+        renderRoster(m);
+        break;
+      case "STATE": {
+        phase = m.phase;
+        $("phasePill").textContent = ({LOBBY:"Lobby",REVEAL:"Dealing",NIGHT:"Night",MORNING:"Morning",DAY_DISCUSSION:"Daybreak",DAY_VOTE:"The Vote",END:"Last Call"})[m.phase] || m.phase;
+        $("roundLabel").textContent = m.round ? "Round " + m.round : "";
+        renderAlive(m.alive, m.dead);
+        renderControls();
+        if (m.phase === "LOBBY") show("lobby");
+        else if (m.phase === "END") {} // handled by GAME_OVER
+        else show("play");
+        break;
+      }
+      case "NARRATE":
+        $("narration").textContent = m.text;
+        MidnightSpeak.narrate(m);
+        break;
+      case "VOTE_PROGRESS":
+        $("progress").textContent = "Votes in: " + m.cast + " / " + m.total;
+        break;
+      case "VOTE_TALLY":
+        $("progress").textContent = "";
+        break;
+      case "GAME_OVER": {
+        const b = $("endBanner");
+        b.textContent = m.winner === "town" ? "TOWN WINS" : "THE FAMILY WINS";
+        b.className = "banner " + m.winner;
+        const ul = $("endList"); ul.innerHTML = "";
+        m.roles.forEach((r) => {
+          const li = document.createElement("li");
+          li.innerHTML = "<span>" + r.name + "</span><span class='tag'>" + r.role + "</span>";
+          ul.appendChild(li);
+        });
+        show("end");
+        break;
+      }
+      case "ERROR":
+        $("startHint").textContent = m.message;
+        break;
+    }
+  }
+
+  function renderAlive(alive, dead) {
+    const a = $("aliveList"); a.innerHTML = "";
+    (alive || []).forEach((p) => { const li = document.createElement("li"); li.textContent = p.name; a.appendChild(li); });
+    const d = $("deadList"); d.innerHTML = "";
+    (dead || []).forEach((p) => { const li = document.createElement("li"); li.innerHTML = "<span class='dead'>" + p.name + "</span><span class='tag'>" + (p.role || "?") + "</span>"; d.appendChild(li); });
+  }
+
+  // voice provider note
+  fetch("/healthz").then(r => r.json()).then(j => {
+    $("voiceNote").textContent = j.voice === "elevenlabs" ? "Narrator: Silas (ElevenLabs)" : "Narrator: Silas (browser voice — add an ElevenLabs key for the real thing)";
+  }).catch(()=>{});
+})();
+</script>
+</body>
+</html>

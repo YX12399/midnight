@@ -1,0 +1,9 @@
+{
+  "_comment": "Voice config (spec §4). provider talks to a swappable VoiceProvider interface.",
+  "provider": "elevenlabs",
+  "narrator_voice_id": "pNInz6obpgDQGcFmaJgB",
+  "tts_model": "eleven_flash_v2_5",
+  "stt_model": "scribe_v2",
+  "fallback_provider": "browser",
+  "_notes": "narrator_voice_id defaults to a deep prebuilt voice (Adam) so it works the moment ELEVENLABS_API_KEY is set. For the real smoky Silas, create a custom voice with the Voice Design prompt in the README/voice-bible and paste its voice id here. An invalid id simply falls back to browser TTS. eleven_flash_v2_5 = ~75ms latency; use eleven_v3 for pre-rendered high-quality lines. NEVER put the API key in this file — it lives only in the ELEVENLABS_API_KEY env var."
+}

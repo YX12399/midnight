@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: midnight
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server/index.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: ELEVENLABS_API_KEY
+        sync: false   # set in the Render dashboard; leave unset to use browser TTS

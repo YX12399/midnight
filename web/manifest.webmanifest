@@ -1,0 +1,10 @@
+{
+  "name": "MIDNIGHT",
+  "short_name": "MIDNIGHT",
+  "description": "A voice-narrated game of trust & lies.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0a0f",
+  "theme_color": "#0b0a0f",
+  "icons": []
+}
