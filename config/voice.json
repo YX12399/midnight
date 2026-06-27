@@ -1,7 +1,7 @@
 {
   "_comment": "Voice config (spec §4). provider talks to a swappable VoiceProvider interface.",
   "provider": "elevenlabs",
-  "narrator_voice_id": "pNInz6obpgDQGcFmaJgB",
+  "narrator_voice_id": "9zK1op11JLJtQ6N3gK29",
   "tts_model": "eleven_flash_v2_5",
   "stt_model": "scribe_v2",
   "fallback_provider": "browser",

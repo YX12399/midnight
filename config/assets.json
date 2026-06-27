@@ -1,9 +1,14 @@
 {
-  "_comment": "Paste Higgsfield https URLs here (spec §3). Empty values fall back to built-in noir CSS art.",
+  "_comment": "Higgsfield noir art URLs (spec §3). Empty values fall back to built-in CSS art.",
   "thumbnail": "",
   "favicon": "",
   "backgrounds": { "lobby": "", "table": "" },
-  "roles": { "godfather": "", "detective": "", "doctor": "", "citizen": "" },
+  "roles": {
+    "godfather": "https://d8j0ntlcm91z4.cloudfront.net/user_3CivjJJMrrNyweR8ln6gnzEZud9/hf_20260627_015905_e6ba549c-9790-4dbf-80d2-c3c31a259f8f.png",
+    "detective": "https://d8j0ntlcm91z4.cloudfront.net/user_3CivjJJMrrNyweR8ln6gnzEZud9/hf_20260627_015852_fccdb7d8-1434-4142-a49e-17609e2dcf04.png",
+    "doctor": "https://d8j0ntlcm91z4.cloudfront.net/user_3CivjJJMrrNyweR8ln6gnzEZud9/hf_20260627_015854_e8f8ed7d-719f-41e3-bc63-7b26ef2f444a.png",
+    "citizen": "https://d8j0ntlcm91z4.cloudfront.net/user_3CivjJJMrrNyweR8ln6gnzEZud9/hf_20260627_015855_a58e2c76-1eaa-4dea-8de2-46422ce7a7a3.png"
+  },
   "cards": { "death": "", "victory_town": "", "victory_mafia": "" },
   "audio": { "ambient": "" }
 }
