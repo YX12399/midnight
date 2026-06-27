@@ -235,6 +235,58 @@ function allLivingTargets(game) {
     .map((p) => ({ id: p.id, name: p.name }));
 }
 
+// ---- bots (solo testing) ---------------------------------------------------
+const BOT_NAMES = ["Bugsy", "Lucky", "Dutch", "Vera", "Mickey", "Sal", "Rita", "Knuckles", "Dot", "Moe", "Gloria", "Ace"];
+function addBots(game, count) {
+  let added = 0;
+  for (let i = 0; i < count && game.players.length < 12; i++) {
+    const used = new Set(game.players.map((p) => p.name.replace(/^🤖 /, "")));
+    const base = BOT_NAMES.find((n) => !used.has(n)) || "Bot" + (game.players.length + 1);
+    game.players.push({
+      id: newId(), name: base, role: undefined, alive: true, revealed: false,
+      token: newToken(), socket: null, bot: true,
+    });
+    added++;
+  }
+  return added;
+}
+const hasLivingHumans = (game) => game.players.some((p) => p.alive && !p.bot);
+
+// Bots pick their night actions (random, role-appropriate), then resolve if done.
+function botNight(game) {
+  if (game.phase !== "NIGHT") return;
+  livingByRole(game, "godfather").filter((p) => p.bot).forEach((gf) => {
+    if (game.nightActions.gf[gf.id] === undefined) {
+      const town = game.players.filter((p) => p.alive && p.id !== gf.id && logic.TEAM[p.role] !== "mafia");
+      const any = game.players.filter((p) => p.alive && p.id !== gf.id);
+      const t = pick(town.length ? town : any);
+      game.nightActions.gf[gf.id] = t ? t.id : null;
+    }
+  });
+  const det = livingByRole(game, "detective").find((p) => p.bot);
+  if (det && game.nightActions.detective === undefined) {
+    const targets = game.players.filter((p) => p.alive && p.id !== det.id);
+    if (targets.length) game.nightActions.detective = pick(targets).id;
+  }
+  const doc = livingByRole(game, "doctor").find((p) => p.bot);
+  if (doc && game.nightActions.doctor === undefined) {
+    const targets = game.players.filter((p) => p.alive);
+    if (targets.length) game.nightActions.doctor = pick(targets).id;
+  }
+  if (nightComplete(game)) resolveNight(game);
+}
+// Bots cast random votes (never themselves), then resolve if done.
+function botVote(game) {
+  if (game.phase !== "DAY_VOTE") return;
+  game.players.filter((p) => p.alive && p.bot).forEach((b) => {
+    if (game.votes[b.id] === undefined) {
+      const targets = game.players.filter((p) => p.alive && p.id !== b.id);
+      game.votes[b.id] = targets.length ? pick(targets).id : "skip";
+    }
+  });
+  if (voteComplete(game)) resolveVote(game);
+}
+
 async function startNight(game) {
   game.round += 1;
   game.phase = "NIGHT";
@@ -275,6 +327,9 @@ async function startNight(game) {
     .forEach((p) =>
       sendPrivate(game, p.id, { type: "NIGHT_WAIT", text: "Eyes closed. Sleep tight." })
     );
+
+  // Bots take their turn shortly after (humans still act on their own).
+  if (game.players.some((p) => p.bot)) setTimeout(() => botNight(game), 1200);
 }
 
 function nightComplete(game) {
@@ -358,6 +413,8 @@ async function startDiscussion(game) {
   armTimer(game, "DAY_DISCUSSION", () => startVote(game));
   pushState(game);
   await narrate(game, "day_discussion");
+  // No living humans to talk it out (pure bot test) -> move to the vote quickly.
+  if (!hasLivingHumans(game)) setTimeout(() => startVote(game), 3500);
 }
 
 async function startVote(game) {
@@ -374,6 +431,9 @@ async function startVote(game) {
     .forEach((p) =>
       send(p.socket, { type: "VOTE_PROMPT", valid_targets: targets })
     );
+
+  // Bots vote shortly after (humans still vote on their own).
+  if (game.players.some((p) => p.bot)) setTimeout(() => botVote(game), 1200);
 }
 
 function voteComplete(game) {
@@ -508,7 +568,7 @@ function rosterEvent(game) {
     type: "ROSTER",
     code: game.code,
     count: game.players.length,
-    players: game.players.map((p) => ({ id: p.id, name: p.name, connected: !!p.socket })),
+    players: game.players.map((p) => ({ id: p.id, name: p.name, connected: !!p.socket, bot: !!p.bot })),
   };
 }
 
@@ -744,6 +804,17 @@ async function handle(ws, msg) {
       const game = games.get(ws._code);
       requireHost(game, msg);
       game.recording = !!msg.value; // opt-in per game (spec §6)
+      pushState(game);
+      return;
+    }
+
+    case "HOST_ADD_BOTS": {
+      const game = games.get(ws._code);
+      requireHost(game, msg);
+      if (game.phase !== "LOBBY") return;
+      const count = Math.max(1, Math.min(11, Number(msg.count) || 1));
+      addBots(game, count);
+      broadcastRoom(game, rosterEvent(game));
       pushState(game);
       return;
     }
