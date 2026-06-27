@@ -171,3 +171,49 @@ button.danger { background: linear-gradient(180deg, #c75049, var(--blood)); colo
 .banner.town { color: var(--gold); }
 .banner.mafia { color: var(--blood); }
 .foot { text-align:center; color: var(--muted); font-size: 12px; margin-top: auto; padding-top: 24px; }
+
+/* ---- 3D flip role card ---- */
+.flip-scene { perspective: 1400px; width: 260px; max-width: 78vw; margin: 8px auto 4px; }
+.flip-card {
+  position: relative; width: 100%; aspect-ratio: 3 / 4;
+  transform-style: preserve-3d;
+  transition: transform 0.95s cubic-bezier(.2,.75,.2,1);
+  cursor: pointer;
+  animation: cardFloat 5s ease-in-out infinite;
+}
+.flip-card.revealed { transform: rotateY(180deg); animation: none; }
+@keyframes cardFloat {
+  0%,100% { transform: translateY(0) rotateZ(-0.6deg); }
+  50% { transform: translateY(-8px) rotateZ(0.6deg); }
+}
+.flip-face {
+  position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  border-radius: 16px; overflow: hidden;
+  border: 1px solid rgba(217,164,91,0.5);
+  box-shadow: 0 22px 55px rgba(0,0,0,0.65);
+}
+.flip-back {
+  background:
+    repeating-linear-gradient(45deg, rgba(217,164,91,0.06) 0 10px, transparent 10px 20px),
+    linear-gradient(160deg, #221c2c, #0b0a0f);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center;
+}
+.flip-back .seal { font-size: 56px; color: var(--gold); text-shadow: 0 0 22px rgba(217,164,91,0.5); }
+.flip-back .bk-brand { letter-spacing: 0.4em; font-size: 13px; color: var(--gold-dim); text-transform: uppercase; }
+.flip-back .bk-tap { font-size: 11px; letter-spacing: 0.25em; color: var(--muted); text-transform: uppercase; }
+.flip-front { transform: rotateY(180deg); background: #0b0a0f; }
+.flip-front .art {
+  position:absolute; inset:0; background-size: cover; background-position: center;
+  display:flex; align-items:center; justify-content:center; font-size: 84px;
+}
+.flip-front .label {
+  position:absolute; left:0; right:0; bottom:0; padding: 16px 12px 14px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.92) 30%, transparent);
+  text-align:center;
+}
+.flip-front .label .role-name { font-size: 26px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin: 0; }
+.flip-front .label .team { font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+/* team glow once revealed */
+.flip-card.revealed.team-mafia .flip-front { box-shadow: inset 0 0 0 2px rgba(181,65,58,0.8), 0 0 34px rgba(181,65,58,0.45); }
+.flip-card.revealed.team-town  .flip-front { box-shadow: inset 0 0 0 2px rgba(217,164,91,0.8), 0 0 34px rgba(217,164,91,0.4); }
+.flip-card.revealed.team-mafia .flip-front .label .role-name { color: #e7766e; }
