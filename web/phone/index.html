@@ -39,11 +39,25 @@
 
   <!-- ROLE -->
   <section id="screen-role" class="card role-card hidden">
-    <div class="role-art" id="roleArt"></div>
-    <div class="role-name" id="roleName"></div>
-    <div class="team" id="roleTeam"></div>
-    <p id="roleBlurb" style="margin-top:16px;line-height:1.6"></p>
-    <button class="ghost" id="hideRole">Tap to hide — keep it secret</button>
+    <p class="muted center" id="roleHint" style="letter-spacing:.04em">Your fate is dealt. Tap the card to see it.</p>
+    <div class="flip-scene">
+      <div class="flip-card" id="flipCard">
+        <div class="flip-face flip-back">
+          <div class="seal">&#10022;</div>
+          <div class="bk-brand">Midnight</div>
+          <div class="bk-tap">tap to reveal</div>
+        </div>
+        <div class="flip-face flip-front">
+          <div class="art" id="roleArt"></div>
+          <div class="label">
+            <div class="role-name" id="roleName"></div>
+            <div class="team" id="roleTeam"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p id="roleBlurb" class="center" style="margin-top:18px;line-height:1.6;min-height:48px"></p>
+    <button class="ghost" id="hideRole">Hide — keep it secret</button>
   </section>
 
   <!-- NIGHT ACTION -->
@@ -132,6 +146,14 @@
     ws.send({ type: "JOIN", code: c, name });
   };
 
+  $("flipCard").onclick = () => {
+    const fc = $("flipCard");
+    if (!fc.classList.contains("revealed")) {
+      fc.classList.add("revealed");
+      $("roleHint").textContent = "Memorize it. Keep your face still.";
+      setTimeout(() => { $("roleBlurb").style.visibility = "visible"; }, 520);
+    }
+  };
   $("hideRole").onclick = () => { $("screen-role").classList.add("hidden"); show("lobby"); $("lobbyName").textContent = "Role hidden 🤫"; };
   $("resultHide").onclick = () => $("screen-result").classList.add("hidden");
 
@@ -172,6 +194,11 @@
         $("roleName").textContent = m.role;
         $("roleTeam").textContent = m.team === "mafia" ? "The Family" : "The Town";
         $("roleBlurb").textContent = m.blurb || "";
+        const fc = $("flipCard");
+        fc.classList.remove("revealed", "team-mafia", "team-town");
+        fc.classList.add(m.team === "mafia" ? "team-mafia" : "team-town");
+        $("roleBlurb").style.visibility = "hidden";
+        $("roleHint").textContent = "Your fate is dealt. Tap the card to see it.";
         show("role");
         break;
       }
