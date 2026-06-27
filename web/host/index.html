@@ -33,6 +33,13 @@
     </div>
     <button id="startBtn" disabled>Lock the Doors &amp; Deal</button>
     <p class="center muted" id="startHint">Need at least 5 players.</p>
+    <div class="center" style="margin-top:14px;border-top:1px solid rgba(217,164,91,0.15);padding-top:14px">
+      <p class="muted" style="margin:0 0 10px;font-size:13px">Testing solo? Fill the table with bots.</p>
+      <div class="row">
+        <button class="ghost" id="addBotBtn">🤖 Add a bot</button>
+        <button class="ghost" id="fillBotsBtn">Fill to 5 &amp; test</button>
+      </div>
+    </div>
   </section>
 
   <!-- PLAY -->
@@ -88,13 +95,18 @@
 
   $("startBtn").onclick = () => { MidnightSpeak.unlock(); ws.send({ type: "HOST_START", hostToken }); };
   $("againBtn").onclick = () => ws.send({ type: "HOST_RESTART", hostToken });
+  $("addBotBtn").onclick = () => ws.send({ type: "HOST_ADD_BOTS", hostToken, count: 1 });
+  $("fillBotsBtn").onclick = () => { MidnightSpeak.unlock(); ws.send({ type: "HOST_ADD_BOTS", hostToken, count: 5 - lastCount }); };
 
+  let lastCount = 0;
   function renderRoster(m) {
+    lastCount = m.count;
     $("count").textContent = "(" + m.count + ")";
     const ul = $("roster"); ul.innerHTML = "";
     m.players.forEach((p) => {
       const li = document.createElement("li");
-      li.innerHTML = "<span>" + p.name + "</span><span class='muted'>" + (p.connected ? "●" : "○") + "</span>";
+      const tag = p.bot ? "<span class='tag' style='color:var(--gold-dim)'>🤖 bot</span>" : "<span class='muted'>" + (p.connected ? "●" : "○") + "</span>";
+      li.innerHTML = "<span>" + p.name + "</span>" + tag;
       ul.appendChild(li);
     });
     const ok = m.count >= 5 && m.count <= 12;
