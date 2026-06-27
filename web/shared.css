@@ -26,8 +26,9 @@ body {
 .wrap {
   max-width: 560px;
   margin: 0 auto;
-  padding: 24px 20px 60px;
+  padding: calc(24px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
   min-height: 100vh;
+  min-height: 100dvh; /* avoids mobile browser chrome cutting off content */
   display: flex;
   flex-direction: column;
 }
@@ -207,8 +208,8 @@ button.danger { background: linear-gradient(180deg, #c75049, var(--blood)); colo
   display:flex; align-items:center; justify-content:center; font-size: 84px;
 }
 .flip-front .label {
-  position:absolute; left:0; right:0; bottom:0; padding: 16px 12px 14px;
-  background: linear-gradient(0deg, rgba(0,0,0,0.92) 30%, transparent);
+  position:absolute; left:0; right:0; bottom:0; padding: 44px 12px 14px;
+  background: linear-gradient(0deg, #000 0%, #000 40%, rgba(0,0,0,0.92) 62%, transparent 100%);
   text-align:center;
 }
 .flip-front .label .role-name { font-size: 26px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin: 0; }
