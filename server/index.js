@@ -16,6 +16,14 @@ const TtsCache = require("./tts-cache");
 const ROOT = path.join(__dirname, "..");
 const PORT = process.env.PORT || 3000;
 
+// ---- phase turn-timers (auto-resolve so one AFK player can't stall the table) ----
+// Durations in seconds; override per-deploy via env. 0 disables that phase's timer.
+const PHASE_SECONDS = {
+  NIGHT: Number(process.env.NIGHT_SECONDS || 60),
+  DAY_DISCUSSION: Number(process.env.DISCUSSION_SECONDS || 120),
+  DAY_VOTE: Number(process.env.VOTE_SECONDS || 45),
+};
+
 // ---- config + content ------------------------------------------------------
 function readJSON(p, fallback) {
   try {
@@ -86,6 +94,8 @@ function createGame() {
     recording: false, // opt-in (spec §6)
     nightActions: { gf: {}, detective: undefined, doctor: undefined },
     votes: {}, // voterId -> targetId | 'skip'
+    timer: null, // active phase timer handle (setTimeout)
+    deadline: null, // epoch ms when current phase auto-resolves (null = no timer)
     createdAt: Date.now(),
   };
   games.set(code, game);
@@ -132,12 +142,37 @@ function broadcastAll(game, event) {
   game.players.forEach((p) => p.socket && send(p.socket, event));
 }
 
+// ---- phase timers (auto-resolve on expiry; spec robustness) ----------------
+// Arms a server-side timeout that calls onExpire() if the host/players haven't
+// already advanced the phase. Re-arming or clearing always cancels the prior one,
+// so timers can never stack or fire against a stale phase.
+function clearTimer(game) {
+  if (game.timer) clearTimeout(game.timer);
+  game.timer = null;
+  game.deadline = null;
+}
+function armTimer(game, phase, onExpire) {
+  clearTimer(game);
+  const secs = PHASE_SECONDS[phase] || 0;
+  if (secs <= 0) return; // disabled for this phase
+  const armedPhase = phase;
+  game.deadline = Date.now() + secs * 1000;
+  game.timer = setTimeout(() => {
+    game.timer = null;
+    game.deadline = null;
+    // Guard: only fire if we're still in the very phase this timer was armed for.
+    if (game.phase !== armedPhase) return;
+    Promise.resolve(onExpire()).catch((e) => console.error("timer expiry error:", e));
+  }, secs * 1000);
+}
+
 function publicState(game) {
   return {
     type: "STATE",
     phase: game.phase,
     round: game.round,
     recording: game.recording,
+    deadline: game.deadline, // epoch ms for the active phase timer (null if none)
     alive: game.players
       .filter((p) => p.alive)
       .map((p) => ({ id: p.id, name: p.name })),
@@ -204,6 +239,8 @@ async function startNight(game) {
   game.round += 1;
   game.phase = "NIGHT";
   game.nightActions = { gf: {}, detective: undefined, doctor: undefined };
+  // Arm before pushState so the broadcast STATE carries the countdown deadline.
+  armTimer(game, "NIGHT", () => resolveNight(game));
   pushState(game);
   await narrate(game, "night_falls");
 
@@ -269,6 +306,9 @@ function mafiaTarget(game) {
 }
 
 async function resolveNight(game) {
+  if (game.phase !== "NIGHT") return; // already resolved (guard vs. double-trigger)
+  clearTimer(game);
+  game.phase = "RESOLVING"; // claim the transition so a racing call bails above
   const actions = {
     godfather_target: mafiaTarget(game),
     doctor_save: game.nightActions.doctor || null,
@@ -314,13 +354,18 @@ async function resolveNight(game) {
 // ---- day -------------------------------------------------------------------
 async function startDiscussion(game) {
   game.phase = "DAY_DISCUSSION";
+  // Arm before pushState so the STATE broadcast carries the countdown deadline.
+  armTimer(game, "DAY_DISCUSSION", () => startVote(game));
   pushState(game);
   await narrate(game, "day_discussion");
 }
 
 async function startVote(game) {
+  if (game.phase === "DAY_VOTE") return; // already open (guard vs. double-trigger)
   game.phase = "DAY_VOTE";
   game.votes = {};
+  // Arm before pushState so the STATE broadcast carries the countdown deadline.
+  armTimer(game, "DAY_VOTE", () => resolveVote(game));
   pushState(game);
   await narrate(game, "vote_call");
   const targets = allLivingTargets(game);
@@ -337,6 +382,9 @@ function voteComplete(game) {
 }
 
 async function resolveVote(game) {
+  if (game.phase !== "DAY_VOTE") return; // already resolved (guard vs. double-trigger)
+  clearTimer(game);
+  game.phase = "RESOLVING"; // claim the transition so a racing call bails above
   const result = logic.tallyVotes(game.players, game.votes);
   broadcastRoom(game, { type: "VOTE_TALLY", tally: result.tally });
 
@@ -382,6 +430,7 @@ function sendGhost(game, playerId) {
 
 // ---- end -------------------------------------------------------------------
 async function endGame(game, outcome) {
+  clearTimer(game);
   game.phase = "END";
   game.players = game.players.map((p) => Object.assign({}, p, { revealed: true }));
   rebindSockets(game);
@@ -400,6 +449,7 @@ async function endGame(game, outcome) {
 }
 
 function restartGame(game) {
+  clearTimer(game);
   game.phase = "LOBBY";
   game.round = 0;
   game.votes = {};
@@ -664,6 +714,27 @@ async function handle(ws, msg) {
         });
       }
       if (!p.alive) sendGhost(game, p.id);
+      // Restore the player's *active* prompt so a mid-phase reconnect can still
+      // act (phones lock / backgrounded tabs drop the socket constantly). Without
+      // this, a dropped detective/doctor/voter silently stalls the whole game.
+      if (p.alive) {
+        if (game.phase === "NIGHT") {
+          if (p.role === "godfather" && game.nightActions.gf[p.id] === undefined) {
+            send(ws, { type: "NIGHT_PROMPT", role: "godfather",
+              prompt: pick(script.lines.mafia_prompt), valid_targets: targetsExcluding(game, p.id) });
+          } else if (p.role === "detective" && game.nightActions.detective === undefined) {
+            send(ws, { type: "NIGHT_PROMPT", role: "detective",
+              prompt: pick(script.lines.detective_prompt), valid_targets: targetsExcluding(game, p.id) });
+          } else if (p.role === "doctor" && game.nightActions.doctor === undefined) {
+            send(ws, { type: "NIGHT_PROMPT", role: "doctor",
+              prompt: pick(script.lines.doctor_prompt), valid_targets: allLivingTargets(game) });
+          } else {
+            send(ws, { type: "NIGHT_WAIT", text: "Eyes closed. Sleep tight." });
+          }
+        } else if (game.phase === "DAY_VOTE" && game.votes[p.id] === undefined) {
+          send(ws, { type: "VOTE_PROMPT", valid_targets: allLivingTargets(game) });
+        }
+      }
       send(ws, publicState(game));
       broadcastRoom(game, rosterEvent(game));
       return;
@@ -751,7 +822,10 @@ async function handle(ws, msg) {
 setInterval(() => {
   const now = Date.now();
   for (const [code, g] of games) {
-    if (now - g.createdAt > 6 * 60 * 60 * 1000) games.delete(code);
+    if (now - g.createdAt > 6 * 60 * 60 * 1000) {
+      clearTimer(g);
+      games.delete(code);
+    }
   }
 }, 30 * 60 * 1000);
 
