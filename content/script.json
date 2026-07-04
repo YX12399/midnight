@@ -11,8 +11,15 @@
       "The roster's set. Somewhere in this room, the wrong people are smiling."
     ],
     "night_falls": [
-      "Midnight closes for the night. Eyes down, friends. The honest folk are already dreaming… the rest of us have work to do.",
-      "Lights low. Heads down. The night belongs to the people who don't sleep."
+      "Midnight bolts its doors. Honest folk, close your eyes and dream. Family, doctor, detective — open your phones. You've got work to do.",
+      "Lights low, heads down. If you move in the dark tonight, your phone's waiting. Everyone else, sleep — and hope.",
+      "The last lamp gutters out. Those with business tonight, tap it out on your phones. The rest of you, eyes shut.",
+      "Curfew, friends. Town, dream of better days. Family — you know which pocket your phone's in."
+    ],
+    "night_last_call": [
+      "Clock's running thin, night owls. Make your move before the sun catches you standing over the body.",
+      "Tick, tick. Whatever you're doing in the dark, do it now — dawn doesn't wait.",
+      "Almost sunup. Anyone still deciding had better decide fast."
     ],
     "mafia_prompt": [
       "Family business. Pick your mark.",
@@ -25,6 +32,11 @@
     "doctor_prompt": [
       "Somebody's gonna bleed tonight, doc. Pick who you keep breathing.",
       "Your bag's packed. Choose the one you'll sit up with."
+    ],
+    "citizen_prompt": [
+      "You've got no move tonight — make one anyway. Keeps the neighbors guessing.",
+      "Pick a name, any name. It means nothing. That's the point.",
+      "Eyes shut, finger out. The house enjoys a little theater."
     ],
     "detective_result_clean": [
       "I checked the ledger on your hunch. The name comes back… clean.",
@@ -40,15 +52,40 @@
     ],
     "morning_no_death": [
       "Funny thing — everybody's still breathing. Somebody upstairs was watching out.",
-      "No body this morning. Either the family got cold feet, or somebody played guardian angel."
+      "No body this morning. Either the family got cold feet, or somebody played guardian angel.",
+      "Dawn, and every glass still has an owner. Whoever was watching last night — the house owes you one."
     ],
     "day_discussion": [
-      "Talk amongst yourselves. Somebody at this bar is lying to your face. Find them before they find you.",
-      "Floor's open. Make your accusations. Just remember — the loudest one ain't always the guilty one."
+      "Sun's up — so talk. Out loud, eyes up. Somebody here is lying. Say your piece, then tap Ready; the vote comes when you're all set.",
+      "Floor's open. Argue, accuse, defend. Tap Ready when you're done — or let the clock decide for you.",
+      "Daylight, and suddenly everyone's a saint. Hash it out loud. Hit Ready when you've made up your mind.",
+      "Another sunrise nobody paid for. Talk fast, trust slow — and tap Ready when your mind's made up."
+    ],
+    "discussion_last_call": [
+      "Wind it down, friends — the floor's closing and the ballot box is coming out.",
+      "Save your breath for the vote. Time to talk is nearly spent.",
+      "Last few words before fingers start pointing. Make 'em count."
+    ],
+    "all_ready": [
+      "That's everyone nodding. No sense stalling — phones up, let's vote.",
+      "Room's made up its mind early. Straight to the ballot, then.",
+      "Everybody ready? Good. Grab your phones — time to point fingers."
     ],
     "vote_call": [
-      "Last call for votes. Point your finger and mean it.",
-      "Time's up for talk. Who's taking the long walk?"
+      "Time's up for talk. Phones out — point a finger, or abstain if you've got no spine.",
+      "Last call. Grab your phone and cast your vote. Somebody's taking the long walk.",
+      "Ballots on your phones now. Choose — and mean it.",
+      "The room's gone quiet. Good. Phones up — somebody buys the next round in hell."
+    ],
+    "vote_last_call": [
+      "Ballot's closing, friends. Undecided is still a decision — and a dangerous one.",
+      "Seconds left on the vote. Point now, or let the room decide without you.",
+      "Final grains in the glass. Cast it or lose it."
+    ],
+    "time_extended": [
+      "Relax — I'm pouring another round. The clock can wait a spell.",
+      "House says you get a little longer. Don't waste it on small talk.",
+      "More time on the meter, friends. The night's not done with you yet."
     ],
     "vote_tie": [
       "Can't make up your minds? The room splits, nobody swings. Cowards live another round.",
@@ -60,11 +97,13 @@
     ],
     "town_win": [
       "Last rat's in the river. Midnight's clean tonight. Drinks on the house.",
-      "The family's finished. Town breathes easy. First round's on me."
+      "The family's finished. Town breathes easy. First round's on me.",
+      "And that's the last of 'em. Midnight keeps her doors open another day. To the honest — and the lucky."
     ],
     "mafia_win": [
       "The family runs this town now. Always did. Goodnight, friends — what's left of you.",
-      "Lights out for the good guys. Midnight belongs to the family. It always did."
+      "Lights out for the good guys. Midnight belongs to the family. It always did.",
+      "Take a look around, friends. Every hand at this table wears a ring now. The family thanks you for your patronage."
     ]
   }
 }

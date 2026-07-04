@@ -5,11 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0a0f" />
 <title>MIDNIGHT — Host</title>
+<link rel="icon" href="/favicon.ico" />
+<link rel="apple-touch-icon" href="/assets/icon/apple-touch-icon.png" />
 <link rel="stylesheet" href="/shared.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 <div class="wrap" style="max-width:640px">
+  <button id="soundToggle" class="sound-toggle" title="Ambient sound on/off" aria-label="Toggle ambient sound">♪</button>
   <div class="brand">The house always knows<span class="big">MIDNIGHT</span></div>
 
   <!-- CREATE -->
@@ -21,6 +24,7 @@
 
   <!-- LOBBY -->
   <section id="screen-lobby" class="card hidden">
+    <div class="lobby-hero hidden" id="lobbyHero"></div>
     <p class="center muted">Players scan to join — or punch in the code</p>
     <div class="code" id="codeBig"></div>
     <div id="qr"></div>
@@ -41,7 +45,9 @@
       <span class="phase-pill" id="phasePill">—</span>
       <span class="muted" id="roundLabel" style="margin-left:10px"></span>
     </div>
+    <div class="clock hidden" id="clock"></div>
     <p class="narration" id="narration">…</p>
+    <div class="narration-art hidden" id="narrationArt"></div>
     <div class="row" id="hostControls"></div>
     <p class="center muted" id="progress"></p>
     <div style="display:flex;gap:20px;margin-top:18px">
@@ -58,12 +64,14 @@
 
   <!-- END -->
   <section id="screen-end" class="card hidden center">
+    <div class="victory-art hidden" id="endArt"></div>
     <div class="banner" id="endBanner"></div>
     <ul class="list" id="endList"></ul>
     <button id="againBtn">Play Again — Reshuffle</button>
   </section>
 
   <div class="foot">MIDNIGHT · this device is the room speaker — turn it up</div>
+  <button id="resumePill" class="resume-pill hidden">🔊 Tap to wake Silas</button>
 </div>
 
 <script src="/app-common.js"></script>
@@ -77,16 +85,50 @@
   let code = localStorage.getItem("mid_hostCode");
   let phase = "LOBBY";
 
-  const ws = MidnightWS(onMessage, onOpen);
-  function onOpen() {
-    if (hostToken && code) ws.send({ type: "HOST_RECONNECT", code, hostToken });
+  MidnightClock.mount($("clock"));
+  // Re-light the room to match the phase (see body[data-phase] in shared.css).
+  const MOOD = { NIGHT: "night", MORNING: "morning", DAY_DISCUSSION: "day", DAY_VOTE: "vote", END: "end" };
+  function setMood(phase) {
+    const m = MOOD[phase];
+    if (m) document.body.setAttribute("data-phase", m);
+    else document.body.removeAttribute("data-phase");
+    MidnightAmbient.setPhase(m || "reveal"); // colour the soundscape to the phase too
+  }
+  // The room's ambient soundscape ducks whenever Silas speaks, then swells back.
+  MidnightSpeak.onSpeech(() => MidnightAmbient.duck(true), () => MidnightAmbient.duck(false));
+  let reconnecting = false; // reloaded into a live game — audio needs a fresh gesture
+  let audioUnlocked = false;
+  function unlockAudio() {
+    audioUnlocked = true;
+    MidnightSpeak.unlock();
+    MidnightAmbient.start();
+    $("resumePill").classList.add("hidden");
   }
 
-  $("createBtn").onclick = () => { MidnightSpeak.unlock(); ws.send({ type: "HOST_CREATE" }); };
+  const ws = MidnightWS(onMessage, onOpen);
+  function onOpen() {
+    if (hostToken && code) { reconnecting = true; ws.send({ type: "HOST_RECONNECT", code, hostToken }); }
+  }
+
+  $("createBtn").onclick = () => { unlockAudio(); ws.send({ type: "HOST_CREATE" }); };
 
   $("recording").onchange = (e) => ws.send({ type: "HOST_SET_RECORDING", hostToken, value: e.target.checked });
 
-  $("startBtn").onclick = () => { MidnightSpeak.unlock(); ws.send({ type: "HOST_START", hostToken }); };
+  $("soundToggle").onclick = () => {
+    if (!MidnightAmbient.enabled) { // first tap just switches the ambience on
+      unlockAudio();
+      $("soundToggle").classList.remove("muted");
+      $("soundToggle").title = "Ambient sound on";
+      return;
+    }
+    const muted = MidnightAmbient.toggleMute();
+    $("soundToggle").classList.toggle("muted", muted);
+    $("soundToggle").title = muted ? "Ambient sound off" : "Ambient sound on";
+  };
+
+  $("resumePill").onclick = unlockAudio;
+
+  $("startBtn").onclick = () => { unlockAudio(); ws.send({ type: "HOST_START", hostToken }); };
   $("againBtn").onclick = () => ws.send({ type: "HOST_RESTART", hostToken });
 
   function renderRoster(m) {
@@ -94,7 +136,7 @@
     const ul = $("roster"); ul.innerHTML = "";
     m.players.forEach((p) => {
       const li = document.createElement("li");
-      li.innerHTML = "<span>" + p.name + "</span><span class='muted'>" + (p.connected ? "●" : "○") + "</span>";
+      li.innerHTML = "<span>" + esc(p.name) + "</span><span class='muted'>" + (p.connected ? "●" : "○") + "</span>";
       ul.appendChild(li);
     });
     const ok = m.count >= 5 && m.count <= 12;
@@ -117,6 +159,7 @@
     b.textContent = label; if (cls) b.className = cls; b.onclick = onclick;
     return b;
   }
+  const TIMED_PHASES = ["NIGHT", "DAY_DISCUSSION", "DAY_VOTE"];
   function renderControls() {
     const c = $("hostControls"); c.innerHTML = "";
     if (phase === "NIGHT")
@@ -125,6 +168,9 @@
       c.appendChild(controlButton("Call the vote", "", () => ws.send({ type: "HOST_OPEN_VOTE", hostToken })));
     else if (phase === "DAY_VOTE")
       c.appendChild(controlButton("Force-tally votes", "ghost", () => ws.send({ type: "HOST_RESOLVE_VOTE", hostToken })));
+    // Give the table more time — only meaningful while a countdown is running.
+    if (TIMED_PHASES.includes(phase))
+      c.appendChild(controlButton("+30s", "ghost", () => ws.send({ type: "HOST_EXTEND", hostToken, seconds: 30 })));
   }
 
   function onMessage(m) {
@@ -140,34 +186,57 @@
         renderRoster(m);
         break;
       case "STATE": {
+        const phaseChanged = m.phase !== phase;
         phase = m.phase;
         $("phasePill").textContent = ({LOBBY:"Lobby",REVEAL:"Dealing",NIGHT:"Night",MORNING:"Morning",DAY_DISCUSSION:"Daybreak",DAY_VOTE:"The Vote",END:"Last Call"})[m.phase] || m.phase;
         $("roundLabel").textContent = m.round ? "Round " + m.round : "";
+        MidnightClock.set(m.deadline);
+        setMood(m.phase);
+        if (phaseChanged) {
+          // per-phase furniture — but a same-phase push (e.g. a +30s extend)
+          // must NOT wipe the live ready/vote counter or the morning art
+          $("progress").textContent = "";
+          $("narrationArt").classList.add("hidden"); // a morning NARRATE re-shows it
+        }
         renderAlive(m.alive, m.dead);
         renderControls();
+        // Reloading into a live game: browsers block audio until a gesture.
+        if (reconnecting && !audioUnlocked && m.phase !== "LOBBY")
+          $("resumePill").classList.remove("hidden");
         if (m.phase === "LOBBY") show("lobby");
         else if (m.phase === "END") {} // handled by GAME_OVER
         else show("play");
         break;
       }
-      case "NARRATE":
+      case "NARRATE": {
         $("narration").textContent = m.text;
-        MidnightSpeak.narrate(m);
+        const na = $("narrationArt");
+        if (m.art_url) { na.style.backgroundImage = "url(" + m.art_url + ")"; na.classList.remove("hidden"); }
+        if (!m.replay) MidnightSpeak.narrate(m); // replays redraw silently
+        break;
+      }
+      case "READY_PROGRESS":
+        $("progress").textContent = "Ready to vote: " + m.ready + " / " + m.total;
         break;
       case "VOTE_PROGRESS":
         $("progress").textContent = "Votes in: " + m.cast + " / " + m.total;
         break;
-      case "VOTE_TALLY":
-        $("progress").textContent = "";
+      case "VOTE_TALLY": {
+        // Show the room how the vote actually fell.
+        const parts = (m.results || []).map((r) => esc(r.name) + " " + r.votes);
+        $("progress").textContent = parts.length ? "The count — " + parts.join(" · ") : "";
         break;
+      }
       case "GAME_OVER": {
+        setMood("END");
+        setVictoryArt($("endArt"), m);
         const b = $("endBanner");
         b.textContent = m.winner === "town" ? "TOWN WINS" : "THE FAMILY WINS";
         b.className = "banner " + m.winner;
         const ul = $("endList"); ul.innerHTML = "";
         m.roles.forEach((r) => {
           const li = document.createElement("li");
-          li.innerHTML = "<span>" + r.name + "</span><span class='tag'>" + r.role + "</span>";
+          li.innerHTML = "<span>" + esc(r.name) + "</span><span class='tag'>" + esc(r.role) + "</span>";
           ul.appendChild(li);
         });
         show("end");
@@ -183,12 +252,31 @@
     const a = $("aliveList"); a.innerHTML = "";
     (alive || []).forEach((p) => { const li = document.createElement("li"); li.textContent = p.name; a.appendChild(li); });
     const d = $("deadList"); d.innerHTML = "";
-    (dead || []).forEach((p) => { const li = document.createElement("li"); li.innerHTML = "<span class='dead'>" + p.name + "</span><span class='tag'>" + (p.role || "?") + "</span>"; d.appendChild(li); });
+    (dead || []).forEach((p) => { const li = document.createElement("li"); li.innerHTML = "<span class='dead'>" + esc(p.name) + "</span><span class='tag'>" + esc(p.role || "?") + "</span>"; d.appendChild(li); });
+  }
+
+  // The closing tableau: an animated card when we have one, the still otherwise.
+  function setVictoryArt(el, m) {
+    el.innerHTML = ""; el.style.backgroundImage = "";
+    if (m.video_url) {
+      el.innerHTML = '<video autoplay muted loop playsinline poster="' + esc(m.art_url || "") + '">' +
+        '<source src="' + esc(m.video_url) + '" type="video/mp4"></video>';
+      el.classList.remove("hidden");
+    } else if (m.art_url) {
+      el.style.backgroundImage = "url(" + m.art_url + ")";
+      el.classList.remove("hidden");
+    } else el.classList.add("hidden");
   }
 
   // voice provider note
   fetch("/healthz").then(r => r.json()).then(j => {
     $("voiceNote").textContent = j.voice === "elevenlabs" ? "Narrator: Silas (ElevenLabs)" : "Narrator: Silas (browser voice — add an ElevenLabs key for the real thing)";
+  }).catch(()=>{});
+
+  // lobby hero art (Higgsfield speakeasy) — falls back to nothing, never blocks
+  fetch("/config/assets.json").then(r => r.json()).then(a => {
+    const src = a && a.backgrounds && a.backgrounds.lobby;
+    if (src) { const h = $("lobbyHero"); h.style.backgroundImage = "url(" + src + ")"; h.classList.remove("hidden"); }
   }).catch(()=>{});
 })();
 </script>

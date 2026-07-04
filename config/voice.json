@@ -5,5 +5,10 @@
   "tts_model": "eleven_flash_v2_5",
   "stt_model": "scribe_v2",
   "fallback_provider": "browser",
+  "prebaked": {
+    "name": "higgsfield",
+    "voice_id": "e5666b9c-99a2-4fac-8b4e-abee078b186d",
+    "_note": "Vlad (Higgsfield seed_audio) — fixed narration lines pre-rendered into .cache/tts/ via scripts/bake-audio.mjs. Used automatically when ELEVENLABS_API_KEY is absent; dynamic {NAME}/{ROLE} lines fall back to browser TTS. Set the key to voice every line at runtime instead."
+  },
   "_notes": "narrator_voice_id defaults to a deep prebuilt voice (Adam) so it works the moment ELEVENLABS_API_KEY is set. For the real smoky Silas, create a custom voice with the Voice Design prompt in the README/voice-bible and paste its voice id here. An invalid id simply falls back to browser TTS. eleven_flash_v2_5 = ~75ms latency; use eleven_v3 for pre-rendered high-quality lines. NEVER put the API key in this file — it lives only in the ELEVENLABS_API_KEY env var."
 }

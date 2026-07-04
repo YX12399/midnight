@@ -108,7 +108,9 @@
     let detective = null;
     if (actions.detective_query) {
       const q = byId(players, actions.detective_query);
-      if (q) {
+      // Only the living can be investigated — a face-down night kill keeps
+      // its secret (mirrors the alive-check on the kill branch above).
+      if (q && q.alive) {
         const team = TEAM[q.role];
         detective = {
           targetId: q.id,

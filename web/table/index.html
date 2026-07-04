@@ -3,46 +3,160 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0b0a0f" />
 <title>MIDNIGHT — Table View</title>
+<link rel="icon" href="/favicon.ico" />
+<link rel="apple-touch-icon" href="/assets/icon/apple-touch-icon.png" />
 <link rel="stylesheet" href="/shared.css" />
 </head>
 <body>
-<div class="wrap" style="max-width:900px">
-  <div class="brand"><span class="big">MIDNIGHT</span></div>
+<div class="wrap" style="max-width:960px">
+  <div class="brand">The house always knows<span class="big">MIDNIGHT</span></div>
 
   <section id="join" class="card center">
+    <div class="lobby-hero hidden" id="lobbyHero"></div>
+    <p class="tagline">The room's big screen — cast this to the TV.</p>
     <label>Table code</label>
     <input id="code" type="text" maxlength="4" style="text-transform:uppercase" placeholder="4 letters" />
     <button id="go">Show the Room</button>
+    <p class="muted center" id="joinErr" style="min-height:18px;margin-top:10px"></p>
   </section>
 
   <section id="view" class="card hidden center">
-    <span class="phase-pill" id="phase">—</span>
-    <span class="muted" id="round" style="margin-left:10px"></span>
-    <p class="narration" id="narration" style="font-size:30px;min-height:80px">…</p>
+    <div class="center">
+      <span class="phase-pill" id="phase">—</span>
+      <span class="muted" id="round" style="margin-left:10px"></span>
+    </div>
+    <div class="clock hidden" id="clock"></div>
+    <p class="narration" id="narration" style="font-size:30px;min-height:70px">…</p>
+    <div class="narration-art hidden" id="narrationArt" style="height:340px"></div>
+    <div class="victory-art hidden" id="victoryArt"></div>
+    <div class="banner hidden" id="banner"></div>
+    <p class="center muted" id="progress" style="min-height:22px"></p>
     <div style="display:flex;gap:30px;justify-content:center;text-align:left;margin-top:20px">
-      <div><label>Still standing</label><ul class="list" id="alive"></ul></div>
-      <div><label>Gone</label><ul class="list" id="dead"></ul></div>
+      <div style="flex:1"><label>Still standing</label><ul class="list" id="alive"></ul></div>
+      <div style="flex:1"><label>Gone</label><ul class="list" id="dead"></ul></div>
     </div>
   </section>
 </div>
 <script src="/app-common.js"></script>
 <script>
-(function(){
-  const $=(id)=>document.getElementById(id);
-  const qp=new URLSearchParams(location.search);
-  if(qp.get("code")) $("code").value=qp.get("code").toUpperCase();
-  const ws=MidnightWS(onMessage,()=>{});
-  $("go").onclick=()=>{ const c=$("code").value.trim().toUpperCase(); if(c.length===4){ ws.send({type:"TABLE_JOIN",code:c}); $("join").classList.add("hidden"); $("view").classList.remove("hidden"); } };
-  function onMessage(m){
-    if(m.type==="STATE"){
-      $("phase").textContent=m.phase; $("round").textContent=m.round?("Round "+m.round):"";
-      const a=$("alive"); a.innerHTML=""; (m.alive||[]).forEach(p=>{const li=document.createElement("li");li.textContent=p.name;a.appendChild(li);});
-      const d=$("dead"); d.innerHTML=""; (m.dead||[]).forEach(p=>{const li=document.createElement("li");li.innerHTML="<span class='dead'>"+p.name+"</span><span class='tag'>"+(p.role||"?")+"</span>";d.appendChild(li);});
-    }
-    if(m.type==="NARRATE"){ $("narration").textContent=m.text; }
-    if(m.type==="GAME_OVER"){ $("narration").textContent = m.winner==="town"?"TOWN WINS":"THE FAMILY WINS"; }
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const qp = new URLSearchParams(location.search);
+  if (qp.get("code")) $("code").value = qp.get("code").toUpperCase();
+
+  MidnightClock.mount($("clock"));
+  const LABEL = { LOBBY: "Lobby", REVEAL: "Dealing", NIGHT: "Night", MORNING: "Morning", DAY_DISCUSSION: "Daybreak", DAY_VOTE: "The Vote", END: "Last Call" };
+  const MOOD = { NIGHT: "night", MORNING: "morning", DAY_DISCUSSION: "day", DAY_VOTE: "vote", END: "end" };
+  function setMood(phase) {
+    const m = MOOD[phase];
+    if (m) document.body.setAttribute("data-phase", m);
+    else document.body.removeAttribute("data-phase");
   }
+
+  // Re-send TABLE_JOIN on every (re)connect — a Wi-Fi blip must never freeze
+  // the TV for the rest of the night.
+  let joinedCode = null;
+  let lastPhase = null;
+  const ws = MidnightWS(onMessage, () => { if (joinedCode) ws.send({ type: "TABLE_JOIN", code: joinedCode }); });
+  $("go").onclick = () => {
+    const c = $("code").value.trim().toUpperCase();
+    if (c.length === 4) { $("joinErr").textContent = ""; joinedCode = c; ws.send({ type: "TABLE_JOIN", code: c }); }
+  };
+
+  function renderRoster(alive, dead) {
+    const a = $("alive"); a.innerHTML = "";
+    (alive || []).forEach((p) => { const li = document.createElement("li"); li.textContent = p.name; a.appendChild(li); });
+    const d = $("dead"); d.innerHTML = "";
+    (dead || []).forEach((p) => { const li = document.createElement("li"); li.innerHTML = "<span class='dead'>" + esc(p.name) + "</span><span class='tag'>" + esc(p.role || "?") + "</span>"; d.appendChild(li); });
+  }
+
+  function setVictoryArt(el, m) {
+    el.innerHTML = ""; el.style.backgroundImage = "";
+    if (m.video_url) {
+      el.innerHTML = '<video autoplay muted loop playsinline poster="' + esc(m.art_url || "") + '">' +
+        '<source src="' + esc(m.video_url) + '" type="video/mp4"></video>';
+      el.classList.remove("hidden");
+    } else if (m.art_url) {
+      el.style.backgroundImage = "url(" + m.art_url + ")";
+      el.classList.remove("hidden");
+    } else el.classList.add("hidden");
+  }
+
+  function onMessage(m) {
+    switch (m.type) {
+      case "TABLE_OK":
+        $("join").classList.add("hidden");
+        $("view").classList.remove("hidden");
+        break;
+      case "STATE": {
+        const changed = m.phase !== lastPhase;
+        lastPhase = m.phase;
+        $("phase").textContent = LABEL[m.phase] || m.phase;
+        $("round").textContent = m.round ? "Round " + m.round : "";
+        MidnightClock.set(m.deadline);
+        setMood(m.phase);
+        if (changed) {
+          $("progress").textContent = "";
+          $("narrationArt").classList.add("hidden"); // a morning NARRATE re-shows it
+        }
+        if (m.phase !== "END") { // a rematch clears the last game's finale
+          $("victoryArt").classList.add("hidden");
+          $("banner").classList.add("hidden");
+          if (changed && m.phase === "LOBBY") $("narration").textContent = "…";
+        }
+        renderRoster(m.alive, m.dead);
+        break;
+      }
+      case "NARRATE": {
+        $("narration").textContent = m.text;
+        const na = $("narrationArt");
+        if (m.art_url) { na.style.backgroundImage = "url(" + m.art_url + ")"; na.classList.remove("hidden"); }
+        break;
+      }
+      case "READY_PROGRESS":
+        $("progress").textContent = "Ready to vote: " + m.ready + " / " + m.total;
+        break;
+      case "VOTE_PROGRESS":
+        $("progress").textContent = "Votes in: " + m.cast + " / " + m.total;
+        break;
+      case "VOTE_TALLY": {
+        const parts = (m.results || []).map((r) => esc(r.name) + " " + r.votes);
+        $("progress").textContent = parts.length ? "The count — " + parts.join(" · ") : "";
+        break;
+      }
+      case "GAME_OVER": {
+        setMood("END");
+        MidnightClock.set(null);
+        setVictoryArt($("victoryArt"), m);
+        $("narrationArt").classList.add("hidden");
+        const b = $("banner");
+        b.textContent = m.winner === "town" ? "TOWN WINS" : "THE FAMILY WINS";
+        b.className = "banner " + m.winner;
+        b.classList.remove("hidden");
+        $("narration").textContent = "";
+        $("progress").textContent = "";
+        const d = $("dead"); d.innerHTML = "";
+        (m.roles || []).forEach((r) => { const li = document.createElement("li"); li.innerHTML = "<span>" + esc(r.name) + "</span><span class='tag'>" + esc(r.role) + "</span>"; d.appendChild(li); });
+        $("alive").innerHTML = "";
+        break;
+      }
+      case "ERROR":
+        // a bad code must not strand the TV on a blank view
+        joinedCode = null;
+        $("view").classList.add("hidden");
+        $("join").classList.remove("hidden");
+        $("joinErr").textContent = m.message || "Couldn't find that table.";
+        break;
+    }
+  }
+
+  // lobby hero art — decorative, never blocks
+  fetch("/config/assets.json").then(r => r.json()).then(a => {
+    const src = a && a.backgrounds && a.backgrounds.lobby;
+    if (src) { const h = $("lobbyHero"); h.style.backgroundImage = "url(" + src + ")"; h.classList.remove("hidden"); }
+  }).catch(()=>{});
 })();
 </script>
 </body>

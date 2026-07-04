@@ -2,18 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0b0a0f" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <title>MIDNIGHT — Player</title>
 <link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/favicon.ico" />
+<link rel="apple-touch-icon" href="/assets/icon/apple-touch-icon.png" />
 <link rel="stylesheet" href="/shared.css" />
 </head>
 <body>
 <div class="wrap">
   <div class="brand">A game of trust &amp; lies<span class="big">MIDNIGHT</span></div>
   <div class="caption" id="caption"></div>
+  <div class="clock hidden" id="clock"></div>
 
   <!-- JOIN -->
   <section id="screen-join" class="card">
@@ -33,13 +36,25 @@
     <p class="muted" id="lobbyCount"></p>
   </section>
 
-  <!-- ROLE -->
+  <!-- ROLE (concealed by default — press & hold to peek) -->
   <section id="screen-role" class="card role-card hidden">
-    <div class="role-art" id="roleArt"></div>
-    <div class="role-name" id="roleName"></div>
-    <div class="team" id="roleTeam"></div>
-    <p id="roleBlurb" style="margin-top:16px;line-height:1.6"></p>
-    <button class="ghost" id="hideRole">Tap to hide — keep it secret</button>
+    <div id="peekArea">
+      <div class="reveal-cover">
+        <div class="cover-mark">🂠</div>
+        <div class="cover-title">Your part is cast</div>
+        <p class="muted">Shield your phone, then <b>press&nbsp;&amp;&nbsp;hold</b> below to see who you are.</p>
+        <div class="peek-hint">press &amp; hold</div>
+      </div>
+      <div class="reveal-body">
+        <div class="role-art" id="roleArt"></div>
+        <div class="role-name" id="roleName"></div>
+        <div class="team" id="roleTeam"></div>
+        <p id="roleBlurb" style="margin-top:16px;line-height:1.6"></p>
+        <p id="roleAllies" class="allies hidden"></p>
+        <p class="muted" style="margin-top:10px">Memorise it — release to hide. Night falls soon.</p>
+      </div>
+    </div>
+    <button class="ghost" id="hideRole">Done — I know my part</button>
   </section>
 
   <!-- NIGHT ACTION -->
@@ -67,7 +82,9 @@
   <section id="screen-day" class="card hidden center">
     <div class="phase-pill">Daybreak</div>
     <p class="narration">Heads up. Talk it out — out loud, eyes on each other. Find the rat.</p>
-    <p class="muted">No taps right now. Just your voice and your gut.</p>
+    <p class="muted">Debate out loud. Tap <b>Ready</b> when you're done — the vote opens once everyone is.</p>
+    <button id="readyBtn" class="ghost">I'm ready to vote</button>
+    <p class="caption" id="readyCount"></p>
   </section>
 
   <!-- VOTE -->
@@ -87,6 +104,7 @@
 
   <!-- END -->
   <section id="screen-end" class="card hidden center">
+    <div class="victory-art hidden" id="endArt"></div>
     <div class="banner" id="endBanner"></div>
     <ul class="list" id="endList"></ul>
   </section>
@@ -103,6 +121,14 @@
     screens.forEach((s) => $("screen-" + s).classList.toggle("hidden", s !== name));
   }
   function caption(t) { $("caption").textContent = t || ""; }
+  MidnightClock.mount($("clock"));
+  // Re-light the phone to match the phase (see body[data-phase] in shared.css).
+  const MOOD = { NIGHT: "night", MORNING: "morning", DAY_DISCUSSION: "day", DAY_VOTE: "vote", END: "end" };
+  function setMood(phase) {
+    const m = MOOD[phase];
+    if (m) document.body.setAttribute("data-phase", m);
+    else document.body.removeAttribute("data-phase");
+  }
 
   let token = localStorage.getItem("mid_token");
   let code = localStorage.getItem("mid_code");
@@ -128,8 +154,52 @@
     ws.send({ type: "JOIN", code: c, name });
   };
 
-  $("hideRole").onclick = () => { $("screen-role").classList.add("hidden"); show("lobby"); $("lobbyName").textContent = "Role hidden 🤫"; };
-  $("resultHide").onclick = () => $("screen-result").classList.add("hidden");
+  $("hideRole").onclick = () => { $("screen-role").classList.remove("revealed"); $("screen-role").classList.add("hidden"); show("lobby"); $("lobbyName").textContent = "Role hidden 🤫"; };
+  // Filing away the detective's verdict lands somewhere sensible, never a blank page.
+  $("resultHide").onclick = () => {
+    $("screen-result").classList.add("hidden");
+    const mood = document.body.getAttribute("data-phase");
+    if (mood === "day") show("day");
+    else { $("sleepText").textContent = "Filed away. Eyes up — dawn soon."; show("sleep"); }
+  };
+
+  // Keep the screen awake through the long table phases — a locked phone drops
+  // its socket, and a dropped doctor stalls the night. Best-effort only.
+  let wakeLock = null;
+  async function keepAwake() {
+    try {
+      if (navigator.wakeLock && !wakeLock) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => { wakeLock = null; });
+      }
+    } catch (_) { /* browser said no — fine */ }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") keepAwake();
+  });
+
+  // Hold-to-peek secrecy: the role is hidden until you press & hold (shield your
+  // screen), and re-conceals the instant you lift off — no lingering exposure.
+  (function () {
+    const rc = $("screen-role"), peek = $("peekArea");
+    const on = (e) => { if (e) e.preventDefault(); rc.classList.add("revealed"); };
+    const off = () => rc.classList.remove("revealed");
+    peek.addEventListener("pointerdown", on);
+    peek.addEventListener("contextmenu", (e) => e.preventDefault()); // kill iOS long-press menu
+    window.addEventListener("pointerup", off);
+    window.addEventListener("pointercancel", off);
+    window.addEventListener("blur", off); // app backgrounded / notification shade
+  })();
+
+  // Day "Ready" toggle — when everyone's ready, the server opens the vote early.
+  let iAmReady = false;
+  function paintReady() {
+    const b = $("readyBtn");
+    b.textContent = iAmReady ? "Ready ✓ — tap to undo" : "I'm ready to vote";
+    b.classList.toggle("ghost", !iAmReady);
+  }
+  function resetReady() { iAmReady = false; paintReady(); $("readyCount").textContent = ""; }
+  $("readyBtn").onclick = () => { iAmReady = !iAmReady; paintReady(); ws.send({ type: "READY", token, value: iAmReady }); };
 
   function renderTargets(container, targets, onPick) {
     container.innerHTML = "";
@@ -153,6 +223,7 @@
         localStorage.setItem("mid_token", token);
         localStorage.setItem("mid_code", code);
         $("lobbyName").textContent = m.name;
+        keepAwake();
         show("lobby");
         break;
 
@@ -162,24 +233,36 @@
 
       case "ROLE_ASSIGNED": {
         myRole = m.role;
+        $("screen-role").setAttribute("data-role", m.role); // drives the per-role accent colour
         const art = $("roleArt");
         if (m.art_url) { art.style.backgroundImage = "url(" + m.art_url + ")"; art.textContent = ""; }
         else { art.style.backgroundImage = ""; art.textContent = { godfather:"🎩", detective:"🔍", doctor:"⚕", citizen:"🥃" }[m.role] || "?"; }
         $("roleName").textContent = m.role;
         $("roleTeam").textContent = m.team === "mafia" ? "The Family" : "The Town";
         $("roleBlurb").textContent = m.blurb || "";
+        const allies = $("roleAllies");
+        if (m.team === "mafia") {
+          allies.classList.remove("hidden");
+          allies.textContent = (m.allies && m.allies.length)
+            ? "Your family: " + m.allies.join(", ") + " — don't cross them."
+            : "You run the family alone tonight.";
+        } else { allies.classList.add("hidden"); allies.textContent = ""; }
+        $("screen-role").classList.remove("revealed"); // always start concealed
         show("role");
         break;
       }
 
-      case "NIGHT_PROMPT":
+      case "NIGHT_PROMPT": {
         $("nightPrompt").textContent = m.prompt || "Make your move.";
         $("nightDone").classList.add("hidden");
-        renderTargets($("nightTargets"), m.valid_targets, (id) => {
+        // An explicit abstain, so an unwilling actor never stalls the night.
+        const nTargets = m.valid_targets.concat([{ id: "skip", name: "— Stay your hand —" }]);
+        renderTargets($("nightTargets"), nTargets, (id) => {
           ws.send({ type: "NIGHT_ACTION", token, target_id: id });
         });
         show("night");
         break;
+      }
 
       case "NIGHT_WAIT":
         $("sleepText").textContent = m.text || "Eyes closed.";
@@ -216,7 +299,7 @@
         ul.innerHTML = "";
         m.roles.forEach((r) => {
           const li = document.createElement("li");
-          li.innerHTML = "<span class='" + (r.alive ? "" : "dead") + "'>" + r.name + "</span><span class='tag'>" + r.role + "</span>";
+          li.innerHTML = "<span class='" + (r.alive ? "" : "dead") + "'>" + esc(r.name) + "</span><span class='tag'>" + esc(r.role) + "</span>";
           ul.appendChild(li);
         });
         show("ghost");
@@ -227,20 +310,50 @@
         caption(m.text);
         break;
 
+      case "READY_ACK":
+        iAmReady = !!m.ready; paintReady();
+        break;
+
+      case "READY_PROGRESS":
+        $("readyCount").textContent = m.ready + " / " + m.total + " ready to vote";
+        break;
+
       case "STATE":
+        // Ticking countdown for the active timed phase (night action / vote); hides otherwise.
+        MidnightClock.set(m.deadline);
+        setMood(m.phase);
+        if (m.phase !== "DAY_DISCUSSION" && iAmReady) resetReady(); // new day / phase — clear my Ready
         // Living players: if it's day discussion and we're not ghost/role screens, show day.
-        if (m.phase === "DAY_DISCUSSION" && !isGhost()) show("day");
-        if (m.phase === "LOBBY" && token) { /* between-game lobby */ }
+        // (Don't yank the detective's unread verdict — they'll land on day when they file it.)
+        if (m.phase === "DAY_DISCUSSION" && !isGhost() && $("screen-result").classList.contains("hidden")) show("day");
+        // The morning beat: dawn on every living phone while the room hears the news.
+        if (m.phase === "MORNING" && !isGhost() && $("screen-result").classList.contains("hidden")) {
+          $("sleepText").textContent = "Dawn breaks. Eyes open — listen to the room.";
+          show("sleep");
+        }
+        // Play Again: everyone lands back in the between-game lobby, clean.
+        if (m.phase === "LOBBY" && token) {
+          myRole = null;
+          resetReady();
+          $("screen-role").classList.remove("revealed");
+          $("endArt").classList.add("hidden");
+          $("lobbyName").textContent = "Back at the bar — next round soon";
+          show("lobby");
+        }
         break;
 
       case "GAME_OVER": {
+        setMood("END");
+        const art = $("endArt");
+        if (m.art_url) { art.style.backgroundImage = "url(" + m.art_url + ")"; art.classList.remove("hidden"); }
+        else art.classList.add("hidden");
         const b = $("endBanner");
         b.textContent = m.winner === "town" ? "The town breathes easy." : "The family runs this town.";
         b.className = "banner " + m.winner;
         const ul = $("endList"); ul.innerHTML = "";
         m.roles.forEach((r) => {
           const li = document.createElement("li");
-          li.innerHTML = "<span>" + r.name + "</span><span class='tag'>" + r.role + "</span>";
+          li.innerHTML = "<span>" + esc(r.name) + "</span><span class='tag'>" + esc(r.role) + "</span>";
           ul.appendChild(li);
         });
         show("end");

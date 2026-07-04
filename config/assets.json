@@ -2,8 +2,48 @@
   "_comment": "Paste Higgsfield https URLs here (spec §3). Empty values fall back to built-in noir CSS art.",
   "thumbnail": "",
   "favicon": "",
-  "backgrounds": { "lobby": "", "table": "" },
-  "roles": { "godfather": "", "detective": "", "doctor": "", "citizen": "" },
-  "cards": { "death": "", "victory_town": "", "victory_mafia": "" },
-  "audio": { "ambient": "" }
+  "backgrounds": {
+    "lobby": "/assets/backgrounds/lobby.webp",
+    "table": "/assets/backgrounds/lobby.webp"
+  },
+  "roles": {
+    "godfather": "/assets/roles/godfather.webp",
+    "detective": "/assets/roles/detective.webp",
+    "doctor": "/assets/roles/doctor.webp",
+    "citizen": "/assets/roles/citizen.webp"
+  },
+  "_role_variants_note": "Multiple portraits per role; the server picks one per player (deterministic by id) so every townsperson/mafioso has a distinct face. Falls back to roles[role] when a role isn't listed here.",
+  "role_variants": {
+    "citizen": [
+      "/assets/roles/citizen.webp",
+      "/assets/roles/townsperson-1.webp",
+      "/assets/roles/townsperson-2.webp",
+      "/assets/roles/townsperson-3.webp",
+      "/assets/roles/townsperson-4.webp"
+    ],
+    "godfather": [
+      "/assets/roles/godfather.webp",
+      "/assets/roles/mafia-1.webp",
+      "/assets/roles/mafia-2.webp",
+      "/assets/roles/mafia-3.webp"
+    ],
+    "detective": [
+      "/assets/roles/detective.webp",
+      "/assets/roles/detective-1.webp"
+    ],
+    "doctor": [
+      "/assets/roles/doctor.webp",
+      "/assets/roles/doctor-1.webp"
+    ]
+  },
+  "cards": {
+    "death": "/assets/cards/death.webp",
+    "victory_town": "/assets/cards/victory_town.webp",
+    "victory_mafia": "/assets/cards/victory_mafia.webp",
+    "victory_town_video": "/assets/video/victory_town.mp4",
+    "victory_mafia_video": "/assets/video/victory_mafia.mp4"
+  },
+  "audio": {
+    "ambient": ""
+  }
 }

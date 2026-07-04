@@ -89,6 +89,28 @@ The server caches every synthesized line to `.cache/tts/` and serves it from `/t
 so each line costs an API call **once**. Dynamic lines (names, roles) cache on first use.
 If a key isn't set, the game silently falls back to browser TTS — nothing breaks.
 
+The key can also live in a **`.env`** file at the repo root (auto-loaded on boot — no
+`export` needed): `ELEVENLABS_API_KEY=sk_...`. `.env` is gitignored.
+
+### The prebaked voice — **Vlad** (Higgsfield), shipping now
+
+**Every fixed narration line** — game start, nightfall, the night/discussion/vote last-calls,
+the quiet morning, the extend beat, the tie, the vote call, both endings (all 31 variants) —
+is pre-rendered in **Vlad**, a gravelly Russian-mobster voice that suits the game-master, and
+**committed under `content/audio/tts/`** so it ships and plays with **zero runtime cost or API
+key**. Priority order at runtime:
+
+1. **`ELEVENLABS_API_KEY` set** → ElevenLabs voices *every* line at runtime (incl. names/roles).
+2. **No key** → the prebaked **Vlad** lines play for all fixed narration; only the two truly
+   dynamic lines (`morning_death` and `elimination`, which splice in a `{NAME}`/`{ROLE}`) fall
+   back to browser TTS.
+
+The prebaked layer is config-driven (`config/voice.json → prebaked`). To (re-)bake lines:
+generate each fixed line with the Higgsfield `seed_audio` model + Vlad's `voice_id`, drop the
+resulting `{key,index,url}` list into `.cache/audio-urls.json`, and run
+`node scripts/bake-audio.mjs` — it downloads and files each clip under the exact hash the
+server serves. `scripts/audio-manifest.mjs` prints which lines/hashes are expected.
+
 ---
 
 ## Get a public URL (play with people anywhere)
@@ -123,7 +145,7 @@ midnight/
 │  ├─ app-common.js       # shared WS client + narrator playback
 │  └─ shared.css          # noir / speakeasy styling
 ├─ content/script.json    # Silas's lines, templated by phase ({NAME}/{ROLE})
-├─ config/assets.json     # paste Higgsfield art URLs here (falls back to CSS art)
+├─ config/assets.json     # art paths (role cards shipped in web/assets/; empty ⇒ CSS fallback)
 ├─ config/voice.json      # voice provider config
 ├─ scripts/               # engine tests, end-to-end smoke test, line pre-render
 ├─ Dockerfile · render.yaml · fly.toml
@@ -133,9 +155,16 @@ midnight/
 ## Tests
 
 ```bash
-npm test     # pure-engine assertions + a full 5-player game over WebSockets,
-             # asserting town win AND zero secret leaks
+npm test     # one command, six suites, ~69 checks:
+             #  · engine  — pure rules-engine assertions
+             #  · smoke   — a full 5-player game over WebSockets: town win + zero secret leaks
+             #  · timer   — phases auto-resolve so one AFK player can't stall the table
+             #  · edge    — role deal, private reveals, reconnect, bad-input hardening
+             #  · warn    — Silas's "last call" narration fires before each phase expires
+             #  · extend  — the host "+30s" control pushes the live deadline out
 ```
+The socket suites self-spawn isolated servers (see `scripts/run-sockets.js`), so
+there's nothing to start by hand.
 
 ## What's next (P2–P4, see the build spec)
 - **P2** live ElevenLabs voice for dynamic lines · ambient track · death/victory art.

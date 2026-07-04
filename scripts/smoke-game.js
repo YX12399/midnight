@@ -4,6 +4,9 @@
 // leaks to a player who shouldn't see it (spec §8 hard rule).
 
 process.env.PORT = process.env.PORT || "4577";
+process.env.MORNING_SECONDS = process.env.MORNING_SECONDS || "0"; // no dramatic hold under test
+process.env.REVEAL_SECONDS = process.env.REVEAL_SECONDS || "0";   // no reveal hold under test
+process.env.RESOLVE_DELAY_MS = process.env.RESOLVE_DELAY_MS || "0"; // no night-resolve jitter under test
 const assert = require("assert");
 const WebSocket = require("ws");
 const { server } = require("../server/index.js");

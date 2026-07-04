@@ -5,7 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "test": "node scripts/test-engine.js && node scripts/smoke-game.js",
+    "test": "node scripts/test-engine.js && node scripts/smoke-game.js && node scripts/run-sockets.js",
     "prerender": "node scripts/prerender-script.js"
   },
   "dependencies": {

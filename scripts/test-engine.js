@@ -45,6 +45,13 @@ ok(r.detective.verdict === "clean", "townie reads clean");
 r = L.resolveNight(players, { godfather_target: null });
 ok(r.deathId === null, "no target -> no death");
 
+// a face-down corpse keeps its secret: dead players can't be investigated
+const withDead = players.map((p) => (p.id === "gf" ? { ...p, alive: false } : p));
+r = L.resolveNight(withDead, { godfather_target: null, detective_query: "gf" });
+ok(r.detective === null, "investigating a dead player yields no verdict");
+r = L.resolveNight(withDead, { godfather_target: "gf" });
+ok(r.deathId === null, "killing a corpse does nothing");
+
 // --- tallyVotes ---
 let v = L.tallyVotes(players, { gf: "c1", de: "c1", doc: "c2", c1: "c2", c2: "c1" });
 ok(v.eliminatedId === "c1" && v.tie === false, "plurality elimination");
