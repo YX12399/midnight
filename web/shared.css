@@ -303,6 +303,59 @@ button.danger { background: linear-gradient(180deg, #c75049, var(--blood)); colo
 @keyframes clockpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .muted { color: var(--muted); }
 .center { text-align: center; }
+/* ---- Voice-first GM bar (host device) ---- */
+body.voice-active .wrap { padding-bottom: 168px; }
+.voice-bar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 25;
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, rgba(15,13,20,0.86), rgba(9,8,12,0.97));
+  border-top: 1px solid rgba(217, 164, 91, 0.28);
+  box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+}
+.voice-row { display: flex; align-items: center; gap: 12px; max-width: 640px; margin: 0 auto; }
+.voice-orb {
+  width: 18px; height: 18px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--gold-dim);
+  box-shadow: 0 0 0 0 rgba(217, 164, 91, 0.5);
+  transition: background 0.2s ease;
+}
+.voice-orb.hearing { background: var(--gold); animation: orbpulse 1.2s ease-in-out infinite; }
+.voice-orb.speaking { background: var(--blood); animation: orbpulse 0.9s ease-in-out infinite; }
+@keyframes orbpulse { 0% { box-shadow: 0 0 0 0 rgba(217,164,91,0.5); } 70% { box-shadow: 0 0 0 12px rgba(217,164,91,0); } 100% { box-shadow: 0 0 0 0 rgba(217,164,91,0); } }
+.voice-caption {
+  flex: 1; min-width: 0;
+  font-style: italic; color: var(--cream); font-size: 15px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.voice-controls { display: flex; gap: 8px; flex: 0 0 auto; }
+button.mini {
+  width: auto; margin: 0; padding: 8px 12px; font-size: 11px; letter-spacing: 0.1em;
+  border-radius: 8px;
+}
+button.mini.on { background: linear-gradient(180deg, #e7b86c, var(--gold)); color: var(--ink); border-color: transparent; }
+.ptt-btn {
+  display: block; width: 100%; max-width: 640px; margin: 10px auto 0;
+  padding: 18px; font-size: 16px;
+  background: linear-gradient(180deg, var(--panel), var(--ink2));
+  color: var(--gold); border: 1px solid rgba(217, 164, 91, 0.4);
+  border-radius: 12px; touch-action: none; user-select: none;
+}
+.ptt-btn.held {
+  background: linear-gradient(180deg, #2a2113, #1c1610);
+  color: var(--cream); border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(217, 164, 91, 0.25), inset 0 0 30px -8px rgba(217, 164, 91, 0.4);
+}
+.confirm-banner {
+  max-width: 640px; margin: 0 auto 10px;
+  text-align: center; padding: 12px 16px;
+  font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink); background: linear-gradient(180deg, #e7b86c, var(--gold));
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(217, 164, 91, 0.35);
+  animation: peekpulse 1.2s ease-in-out infinite;
+}
 /* Ambient-sound toggle (host, top-right). */
 .sound-toggle {
   position: fixed;

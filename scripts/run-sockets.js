@@ -23,6 +23,7 @@ const SUITES = [
   { name: "mafia-test",  file: "mafia-test.js",  port: 3407, env: { ...FAST, REVEAL_SECONDS: "0", NIGHT_SECONDS: "60" } },
   { name: "guard-test",  file: "guard-test.js",  port: 3408, env: { ...FAST, REVEAL_SECONDS: "0", NIGHT_SECONDS: "60", DISCUSSION_SECONDS: "60", VOTE_SECONDS: "60", MORNING_SECONDS: "1" } },
   { name: "rejoin-test", file: "rejoin-test.js", port: 3409, env: { ...FAST, REVEAL_SECONDS: "0", NIGHT_SECONDS: "60", DISCUSSION_SECONDS: "60", VOTE_SECONDS: "60", MORNING_SECONDS: "1" } },
+  { name: "voice-test",  file: "voice-test.js",  port: 3410, env: { ...FAST, REVEAL_SECONDS: "0", NIGHT_SECONDS: "60" } },
 ];
 
 function waitForPort(port, timeoutMs = 8000) {

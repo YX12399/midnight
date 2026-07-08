@@ -6,8 +6,21 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
+
+// First non-internal IPv4 — so the voice host (which must run on localhost for a
+// secure mic context) can still print a phone-reachable QR to the LAN address.
+function lanIP() {
+  const ifs = os.networkInterfaces();
+  for (const name of Object.keys(ifs)) {
+    for (const a of ifs[name] || []) {
+      if (a.family === "IPv4" && !a.internal) return a.address;
+    }
+  }
+  return null;
+}
 
 const logic = require("../core/logic");
 const { createVoiceProvider } = require("./voice/provider");
@@ -292,6 +305,18 @@ async function narrate(game, phaseKey, slots, artUrl) {
 }
 function deathArt() {
   return (assets.cards && assets.cards.death) || "";
+}
+// Ad-hoc Silas line — a conversational ack/clarification the voice GM triggers
+// (roster read-out, "didn't catch that", confirm prompts). Speaks through the
+// SAME narrate pipeline (so a known script key plays in Vlad's prebaked voice,
+// and arbitrary text falls through to runtime TTS), but is marked `ephemeral`
+// and does NOT overwrite game.lastNarration — a reconnect still replays the real
+// phase line, not a throwaway ack.
+async function sayAdhoc(game, keyOrText, slots) {
+  const n = await narration(keyOrText, slots);
+  broadcastRoom(game, { type: "NARRATE", key: n.key, text: n.text, audio_url: n.audio_url, art_url: null, ephemeral: true });
+  game.players.forEach((p) => p.socket && send(p.socket, { type: "CAPTION", text: n.text }));
+  return n;
 }
 
 // ---- role flavor -----------------------------------------------------------
@@ -750,7 +775,7 @@ const server = http.createServer((req, res) => {
     return serveFile(res, path.join(ROOT, "web", "table", "index.html"));
   if (pathname === "/healthz") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ ok: true, games: games.size, voice: voiceProvider.name }));
+    return res.end(JSON.stringify({ ok: true, games: games.size, voice: voiceProvider.name, lan: lanIP(), port: PORT }));
   }
 
   // static assets under /web and /core
@@ -1100,6 +1125,18 @@ async function handle(ws, msg) {
       const game = games.get(ws._code);
       requireHost(game, msg);
       restartGame(game);
+      return;
+    }
+
+    // Voice GM: make Silas speak an ad-hoc line. {key} plays a prebaked script
+    // line in Vlad's voice; {text} speaks arbitrary words via runtime TTS.
+    case "HOST_SAY": {
+      const game = games.get(ws._code);
+      requireHost(game, msg);
+      const key = typeof msg.key === "string" && script.lines[msg.key] ? msg.key : null;
+      const text = typeof msg.text === "string" ? msg.text.trim().slice(0, 300) : "";
+      if (key) await sayAdhoc(game, key);
+      else if (text) await sayAdhoc(game, text);
       return;
     }
 
