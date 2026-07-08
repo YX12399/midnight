@@ -113,6 +113,35 @@ server serves. `scripts/audio-manifest.mjs` prints which lines/hashes are expect
 
 ---
 
+## Hands-free (voice-first) mode 🎙️
+
+The host device can run the game **entirely by voice** — the table talks to Silas
+and he runs the room like a human game-master. Open the host on a **Chrome/Edge**
+machine (Web Speech needs a secure context, so use `http://localhost:3000/host`);
+the phones still join over your LAN (the QR auto-points at the LAN IP).
+
+- **Hold to talk** (or press **spacebar**), or flip on the **wake word** ("Silas, …").
+- Say **"deal us in"**, **"wake the town"**, **"call the vote"**, **"count the votes"**,
+  **"give us more time"**, **"play again"** — each maps to the exact host action a
+  button already fires. Consequential ones get a spoken, negative-gated confirm
+  ("…say *wait* to stop") so a misheard word can never decide the game.
+- Ask him things: **"who's still standing?"**, **"how do we play?"**, **"say that again."**
+- **Secrets never touch the mic.** Roles, night actions and votes stay on the phones
+  (the anti-leak chokepoint is unchanged). Voice only drives the *public* beats.
+- If the browser can't hear (or you'd rather tap), the existing buttons are always
+  there — voice is a convenience layer, never the system of record.
+
+The full design (interaction model, the secrecy threat model, architecture, and the
+phased build plan) is in **[VOICE_FIRST.md](VOICE_FIRST.md)**. Set `ELEVENLABS_API_KEY`
+to have Silas speak dynamic lines (names, ad-hoc acks) in his real voice; without it,
+fixed narration is the prebaked Vlad and ad-hoc acks fall back to browser TTS.
+
+New modules: `web/host/intents.js` (the grammar — pure + unit-tested), `web/host/ears.js`
+(the SpeechRecognition driver with echo-gate), one additive `HOST_SAY` server message,
+and a voice bar on the host page. Tests: `scripts/intents-test.js` (28) + `scripts/voice-test.js`.
+
+---
+
 ## Get a public URL (play with people anywhere)
 
 The server is a long-lived WebSocket process, so it wants a persistent host (not

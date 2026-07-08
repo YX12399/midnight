@@ -9,6 +9,8 @@
 <link rel="apple-touch-icon" href="/assets/icon/apple-touch-icon.png" />
 <link rel="stylesheet" href="/shared.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/host/intents.js"></script>
+<script src="/host/ears.js"></script>
 </head>
 <body>
 <div class="wrap" style="max-width:640px">
@@ -72,6 +74,20 @@
 
   <div class="foot">MIDNIGHT · this device is the room speaker — turn it up</div>
   <button id="resumePill" class="resume-pill hidden">🔊 Tap to wake Silas</button>
+
+  <!-- VOICE BAR (hands-free mode) -->
+  <div id="voiceBar" class="voice-bar hidden">
+    <div id="confirmBanner" class="confirm-banner hidden"></div>
+    <div class="voice-row">
+      <div class="voice-orb" id="voiceOrb" title="listening state"></div>
+      <div class="voice-caption" id="voiceCaption">Hold to talk to Silas — or flip on the wake word</div>
+      <div class="voice-controls">
+        <button id="wakeToggle" class="mini ghost" type="button">wake word: off</button>
+        <button id="voiceOffToggle" class="mini ghost" type="button">hands-free: on</button>
+      </div>
+    </div>
+    <button id="pttBtn" class="ptt-btn" type="button">🎙 Hold to talk to Silas</button>
+  </div>
 </div>
 
 <script src="/app-common.js"></script>
@@ -94,8 +110,19 @@
     else document.body.removeAttribute("data-phase");
     MidnightAmbient.setPhase(m || "reveal"); // colour the soundscape to the phase too
   }
-  // The room's ambient soundscape ducks whenever Silas speaks, then swells back.
-  MidnightSpeak.onSpeech(() => MidnightAmbient.duck(true), () => MidnightAmbient.duck(false));
+  // ---- voice-first (hands-free) state ----
+  const qp = new URLSearchParams(location.search);
+  let voiceOn = MidnightEars.supported && !qp.has("novoice"); // hands-free by default when the browser can hear
+  let lastAlive = [], lastDead = [], lastNarrationText = "";
+  let pending = null;      // a consequential command awaiting confirm/cancel
+  let pendingTimer = null;
+
+  // The room's ambient soundscape ducks whenever Silas speaks, then swells back;
+  // and the mic hard-mutes while he talks so he never transcribes himself.
+  MidnightSpeak.onSpeech(
+    () => { MidnightAmbient.duck(true); if (voiceOn) MidnightEars.silasStart(); },
+    () => { MidnightAmbient.duck(false); if (voiceOn) MidnightEars.silasEnd(); }
+  );
   let reconnecting = false; // reloaded into a live game — audio needs a fresh gesture
   let audioUnlocked = false;
   function unlockAudio() {
@@ -145,8 +172,9 @@
       m.count > 12 ? "Too many — 12 max." : "Ready when you are.";
   }
 
+  let joinBase = location.origin; // may be overridden with the server's LAN address
   function showQR(code) {
-    const url = location.origin + "/?code=" + code;
+    const url = joinBase + "/?code=" + code;
     $("codeBig").textContent = code;
     $("joinUrl").textContent = url;
     const box = $("qr"); box.innerHTML = "";
@@ -180,6 +208,7 @@
         localStorage.setItem("mid_hostToken", hostToken);
         localStorage.setItem("mid_hostCode", code);
         showQR(code); show("lobby");
+        applyVoiceMode(); // reveal the voice bar now that we're hosting
         break;
       case "ROSTER":
         if (code) showQR(code);
@@ -190,6 +219,7 @@
         phase = m.phase;
         $("phasePill").textContent = ({LOBBY:"Lobby",REVEAL:"Dealing",NIGHT:"Night",MORNING:"Morning",DAY_DISCUSSION:"Daybreak",DAY_VOTE:"The Vote",END:"Last Call"})[m.phase] || m.phase;
         $("roundLabel").textContent = m.round ? "Round " + m.round : "";
+        lastDeadline = m.deadline || null;
         MidnightClock.set(m.deadline);
         setMood(m.phase);
         if (phaseChanged) {
@@ -198,8 +228,10 @@
           $("progress").textContent = "";
           $("narrationArt").classList.add("hidden"); // a morning NARRATE re-shows it
         }
+        lastAlive = m.alive || []; lastDead = m.dead || [];
         renderAlive(m.alive, m.dead);
         renderControls();
+        updateVoiceCaption();
         // Reloading into a live game: browsers block audio until a gesture.
         if (reconnecting && !audioUnlocked && m.phase !== "LOBBY")
           $("resumePill").classList.remove("hidden");
@@ -210,6 +242,7 @@
       }
       case "NARRATE": {
         $("narration").textContent = m.text;
+        if (!m.ephemeral) lastNarrationText = m.text; // acks don't overwrite the phase line for "repeat"
         const na = $("narrationArt");
         if (m.art_url) { na.style.backgroundImage = "url(" + m.art_url + ")"; na.classList.remove("hidden"); }
         if (!m.replay) MidnightSpeak.narrate(m); // replays redraw silently
@@ -268,9 +301,15 @@
     } else el.classList.add("hidden");
   }
 
-  // voice provider note
+  // voice provider note + LAN-aware QR
   fetch("/healthz").then(r => r.json()).then(j => {
-    $("voiceNote").textContent = j.voice === "elevenlabs" ? "Narrator: Silas (ElevenLabs)" : "Narrator: Silas (browser voice — add an ElevenLabs key for the real thing)";
+    $("voiceNote").textContent = j.voice === "elevenlabs" ? "Narrator: Silas (ElevenLabs)" : "Narrator: Silas (Vlad — prebaked; add an ElevenLabs key for live dynamic lines)";
+    // The voice host must run on localhost for a secure mic context, but phones
+    // need the LAN address — point the QR there when the server reports one.
+    if (j.lan && /^(localhost|127\.|::1|\[::1\])/.test(location.hostname)) {
+      joinBase = location.protocol + "//" + j.lan + ":" + (j.port || location.port || 3000);
+      if (code) showQR(code);
+    }
   }).catch(()=>{});
 
   // lobby hero art (Higgsfield speakeasy) — falls back to nothing, never blocks
@@ -278,6 +317,154 @@
     const src = a && a.backgrounds && a.backgrounds.lobby;
     if (src) { const h = $("lobbyHero"); h.style.backgroundImage = "url(" + src + ")"; h.classList.remove("hidden"); }
   }).catch(()=>{});
+
+  // ==================================================================
+  //  VOICE-FIRST GM  — the table talks to Silas; he runs the room.
+  //  A spoken command is just an alias for a host WS message. Nothing
+  //  secret ever touches the mic (roles/night/votes stay on the phones).
+  // ==================================================================
+  let lastDeadline = null;
+  let wakeMode = false;
+  const sendHost = (msg) => ws.send(Object.assign({}, msg, { hostToken }));
+  const sayKey = (key) => hostToken && ws.send({ type: "HOST_SAY", hostToken, key });
+  const sayText = (text) => hostToken && ws.send({ type: "HOST_SAY", hostToken, text });
+
+  function paintOrb(s) {
+    const orb = $("voiceOrb");
+    orb.classList.toggle("hearing", !!s.listening && !s.silasSpeaking);
+    orb.classList.toggle("speaking", !!s.silasSpeaking);
+    if (s && s.error === "not-allowed") $("voiceCaption").textContent = "Mic blocked — allow it, or use the buttons below.";
+  }
+  function showHeard(t) {
+    $("voiceCaption").textContent = "“" + t + "”";
+    clearTimeout(showHeard._t);
+    showHeard._t = setTimeout(updateVoiceCaption, 3500);
+  }
+  function updateVoiceCaption() {
+    if (pending) return;
+    const hint = ({
+      LOBBY: "Say: “Silas, deal us in”",
+      NIGHT: "Say: “Silas, wake the town”  ·  “who's still here?”",
+      MORNING: "The dark's done — say “call the vote” when day opens",
+      DAY_DISCUSSION: "Say: “Silas, call the vote”  ·  “give us more time”",
+      DAY_VOTE: "Phones are voting — say “count the votes”",
+      END: "Say: “Silas, deal again”",
+    })[phase] || "Hold to talk to Silas";
+    $("voiceCaption").textContent = wakeMode ? ("🎙 listening — " + hint) : hint;
+  }
+
+  // ---- the router ----
+  function handleTranscript(t) {
+    if (!t || !t.trim()) return;
+    if (!hostToken) return;                // no game yet — "Open the Bar" first
+    showHeard(t);
+    if (pending) {                         // a confirm is open: only yes/no matter
+      if (MidnightIntents.isCancel(t)) return cancelPending();
+      if (MidnightIntents.isAffirm(t)) return commitPending();
+      return;                              // otherwise wait out the window
+    }
+    const p = MidnightIntents.parse(t);
+    if (p.kind === "command") {
+      if (!MidnightIntents.inPhase(p, phase)) { sayKey("vg_not_now"); return; }
+      startConfirm(p);
+    } else if (p.kind === "flow") {
+      doFlow(p.action);
+    } else if (p.kind === "empty") {
+      sayKey("vg_listening");
+    } else {
+      sayKey("vg_didnt_catch");
+    }
+  }
+  window.MidnightVoiceSim = handleTranscript; // test seam (no mic needed)
+
+  // ---- confirm / cancel (negative-gated: commits unless someone objects) ----
+  function startConfirm(p) {
+    pending = p;
+    const b = $("confirmBanner");
+    b.textContent = "Heard: " + p.label.toUpperCase() + " — say “wait” to stop";
+    b.classList.remove("hidden");
+    sayKey("vg_confirm");
+    clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(commitPending, 4200); // the room's grace window
+  }
+  function commitPending() {
+    if (!pending) return;
+    clearTimeout(pendingTimer);
+    const msg = pending.message; pending = null;
+    $("confirmBanner").classList.add("hidden");
+    updateVoiceCaption();
+    sendHost(msg); // the phase transition's own narration is the ack
+  }
+  function cancelPending() {
+    if (!pending) return;
+    clearTimeout(pendingTimer);
+    pending = null;
+    $("confirmBanner").classList.add("hidden");
+    updateVoiceCaption();
+    sayKey("vg_scrapped");
+  }
+
+  // ---- flow verbs (instant, no confirm) ----
+  function doFlow(action) {
+    if (action === "repeat") {
+      if (lastNarrationText) sayText(lastNarrationText); // exact prebaked line replays in Vlad
+    } else if (action === "roster") {
+      const names = (lastAlive || []).map((p) => p.name);
+      sayKey("vg_roster_intro");
+      if (names.length) sayText(joinNames(names) + (names.length === 1 ? " — the last one standing." : "."));
+    } else if (action === "help") {
+      sayKey("vg_rules");
+    } else if (action === "time") {
+      if (lastDeadline) {
+        const s = Math.max(0, Math.round((lastDeadline - Date.now()) / 1000));
+        sayText("About " + s + " seconds on the clock.");
+      } else sayText("No clock running just now, friend.");
+    }
+  }
+  function joinNames(a) {
+    if (a.length <= 1) return a.join("");
+    if (a.length === 2) return a[0] + " and " + a[1];
+    return a.slice(0, -1).join(", ") + ", and " + a[a.length - 1];
+  }
+
+  // ---- input: push-to-talk + wake word ----
+  MidnightEars.init({
+    interim: (t) => { if (!pending) $("voiceCaption").textContent = "… " + t; },
+    final: handleTranscript,
+    state: paintOrb,
+  });
+  const ptt = $("pttBtn");
+  const grab = (e) => { if (e) e.preventDefault(); if (!audioUnlocked) unlockAudio(); MidnightEars.hold(); ptt.classList.add("held"); };
+  const drop = () => { MidnightEars.release(); ptt.classList.remove("held"); };
+  ["pointerdown"].forEach((ev) => ptt.addEventListener(ev, grab));
+  ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => ptt.addEventListener(ev, drop));
+  // spacebar as push-to-talk on a laptop host
+  let spaceHeld = false;
+  document.addEventListener("keydown", (e) => { if (e.code === "Space" && !spaceHeld && voiceOn && !wakeMode && e.target.tagName !== "INPUT") { spaceHeld = true; e.preventDefault(); grab(); } });
+  document.addEventListener("keyup", (e) => { if (e.code === "Space" && spaceHeld) { spaceHeld = false; drop(); } });
+
+  $("wakeToggle").onclick = () => {
+    if (!MidnightEars.supported) return;
+    if (!audioUnlocked) unlockAudio();
+    wakeMode = !wakeMode;
+    MidnightEars.setMode(wakeMode ? "wake" : "ptt");
+    $("wakeToggle").textContent = "wake word: " + (wakeMode ? "on" : "off");
+    $("wakeToggle").classList.toggle("on", wakeMode);
+    updateVoiceCaption();
+  };
+  $("voiceOffToggle").onclick = () => { voiceOn = !voiceOn; applyVoiceMode(); };
+
+  function applyVoiceMode() {
+    const canVoice = voiceOn && MidnightEars.supported && !!hostToken;
+    $("voiceBar").classList.toggle("hidden", !canVoice);
+    document.body.classList.toggle("voice-active", canVoice);
+    $("voiceOffToggle").textContent = "hands-free: " + (voiceOn ? "on" : "off");
+    if (canVoice) { MidnightEars.setMode(wakeMode ? "wake" : "ptt"); updateVoiceCaption(); }
+    else MidnightEars.setMode("off");
+    if (voiceOn && !MidnightEars.supported)
+      $("voiceNote").textContent = "Hands-free needs Chrome/Edge — tap the buttons instead (everything still works).";
+  }
+  applyVoiceMode();
 })();
 </script>
 </body>

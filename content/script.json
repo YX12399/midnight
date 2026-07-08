@@ -71,6 +71,39 @@
       "Room's made up its mind early. Straight to the ballot, then.",
       "Everybody ready? Good. Grab your phones — time to point fingers."
     ],
+    "vg_didnt_catch": [
+      "Say that again, friend — I didn't catch it.",
+      "Come again? The room's loud tonight.",
+      "Didn't quite get that. One more time, slower."
+    ],
+    "vg_confirm": [
+      "Hold on — say 'wait' if you want me to stop. Otherwise, here we go.",
+      "That's a big move. Speak up now if you want to take it back.",
+      "Alright. Last chance to say 'wait' — or I'll set it in motion."
+    ],
+    "vg_scrapped": [
+      "Forget I asked. Carry on.",
+      "Scratch that. The floor's still yours.",
+      "As you were, friends."
+    ],
+    "vg_roster_intro": [
+      "Here's who's still on their feet.",
+      "Still standing, by my count —",
+      "The living, such as they are —"
+    ],
+    "vg_not_now": [
+      "Can't do that just now, friend.",
+      "Not the moment for that one.",
+      "Hold that thought — wrong time."
+    ],
+    "vg_listening": [
+      "I'm all ears.",
+      "Go on, then.",
+      "Speak up."
+    ],
+    "vg_rules": [
+      "Simple enough. Every night the family picks someone to disappear. The doctor patches one soul, the detective checks one name. Come morning we count the dead, argue it out, and the room votes someone to the door. Town wins if the family's finished. The family wins when they're the last ones laughing. Trust nobody."
+    ],
     "vote_call": [
       "Time's up for talk. Phones out — point a finger, or abstain if you've got no spine.",
       "Last call. Grab your phone and cast your vote. Somebody's taking the long walk.",
